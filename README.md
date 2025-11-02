@@ -3,11 +3,11 @@
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/bluemoon-o2/RGLite)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)]()
-[![Build and Test](https://github.com/your-username/RGLite/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/your-username/RGLite/actions/workflows/build-and-test.yml)
-[![Code Quality](https://github.com/your-username/RGLite/actions/workflows/code-quality.yml/badge.svg)](https://github.com/your-username/RGLite/actions/workflows/code-quality.yml)
-[![Documentation](https://github.com/your-username/RGLite/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/your-username/RGLite/actions/workflows/deploy-docs.yml)
-[![Benchmark](https://github.com/your-username/RGLite/actions/workflows/benchmark.yml/badge.svg)](https://github.com/your-username/RGLite/actions/workflows/benchmark.yml)
-[![Release](https://github.com/your-username/RGLite/actions/workflows/release.yml/badge.svg)](https://github.com/your-username/RGLite/actions/workflows/release.yml)
+[![Build and Test](https://github.com/bluemoon-o2/RGLite/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/bluemoon-o2/RGLite/actions/workflows/build-and-test.yml)
+[![Code Quality](https://github.com/bluemoon-o2/RGLite/actions/workflows/code-quality.yml/badge.svg)](https://github.com/bluemoon-o2/RGLite/actions/workflows/code-quality.yml)
+[![Documentation](https://github.com/bluemoon-o2/RGLite/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/bluemoon-o2/RGLite/actions/workflows/deploy-docs.yml)
+[![Benchmark](https://github.com/bluemoon-o2/RGLite/actions/workflows/benchmark.yml/badge.svg)](https://github.com/bluemoon-o2/RGLite/actions/workflows/benchmark.yml)
+[![Release](https://github.com/bluemoon-o2/RGLite/actions/workflows/release.yml/badge.svg)](https://github.com/bluemoon-o2/RGLite/actions/workflows/release.yml)
 
 ## 语言切换 | Language Switch
 
@@ -214,7 +214,6 @@ RGLite/
 
 - 项目主页: https://github.com/bluemoon-o2/RGLite
 - 问题反馈: https://github.com/bluemoon-o2/RGLite/issues
-- 邮箱: your-email@example.com
 
 ## 致谢
 

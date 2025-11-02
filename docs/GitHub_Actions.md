@@ -8,31 +8,31 @@ In the README file, we have added the following GitHub Actions workflow badges t
 
 - **构建和测试徽章** | **Build and Test Badge**:
   ```markdown
-  [![Build and Test](https://github.com/your-username/RGLite/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/your-username/RGLite/actions/workflows/build-and-test.yml)
+  [![Build and Test](https://github.com/bluemoon-o2/RGLite/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/bluemoon-o2/RGLite/actions/workflows/build-and-test.yml)
   ```
 
 - **代码质量徽章** | **Code Quality Badge**:
   ```markdown
-  [![Code Quality](https://github.com/your-username/RGLite/actions/workflows/code-quality.yml/badge.svg)](https://github.com/your-username/RGLite/actions/workflows/code-quality.yml)
+  [![Code Quality](https://github.com/bluemoon-o2/RGLite/actions/workflows/code-quality.yml/badge.svg)](https://github.com/bluemoon-o2/RGLite/actions/workflows/code-quality.yml)
   ```
 
 - **文档部署徽章** | **Documentation Badge**:
   ```markdown
-  [![Documentation](https://github.com/your-username/RGLite/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/your-username/RGLite/actions/workflows/deploy-docs.yml)
+  [![Documentation](https://github.com/bluemoon-o2/RGLite/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/bluemoon-o2/RGLite/actions/workflows/deploy-docs.yml)
   ```
 
 - **性能基准徽章** | **Benchmark Badge**:
   ```markdown
-  [![Benchmark](https://github.com/your-username/RGLite/actions/workflows/benchmark.yml/badge.svg)](https://github.com/your-username/RGLite/actions/workflows/benchmark.yml)
+  [![Benchmark](https://github.com/bluemoon-o2/RGLite/actions/workflows/benchmark.yml/badge.svg)](https://github.com/bluemoon-o2/RGLite/actions/workflows/benchmark.yml)
   ```
 
 - **发布流程徽章** | **Release Badge**:
   ```markdown
-  [![Release](https://github.com/your-username/RGLite/actions/workflows/release.yml/badge.svg)](https://github.com/your-username/RGLite/actions/workflows/release.yml)
+  [![Release](https://github.com/bluemoon-o2/RGLite/actions/workflows/release.yml/badge.svg)](https://github.com/bluemoon-o2/RGLite/actions/workflows/release.yml)
   ```
 
-> **注意** | **Note**: 请将 `your-username` 替换为您的GitHub用户名或组织名。
-> Please replace `your-username` with your GitHub username or organization name.
+> **注意** | **Note**: 徽章中的用户名已更新为 `bluemoon-o2`，请确保与您的GitHub用户名或组织名匹配。
+> Please note that the username in the badges has been updated to `bluemoon-o2`, ensure it matches your GitHub username or organization name.
 
 This document explains the GitHub Actions workflows set up for the RGLite project and how to use them.
 
