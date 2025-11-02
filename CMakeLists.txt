@@ -34,6 +34,8 @@ add_executable(rg
     src/frontend/parser/Parser.cpp
     src/frontend/ast/AST.cpp
     src/common/Token.cpp
+    src/backend/bytecode/Bytecode.cpp
+    src/backend/codegen/CodeGenerator.cpp
 )
 
 # Add Lexer test executable
@@ -56,6 +58,8 @@ add_executable(test_ast
     src/frontend/ast/AST.cpp
     src/common/errors/ErrorHandler.cpp
     src/common/Token.cpp
+    src/backend/bytecode/Bytecode.cpp
+    src/backend/codegen/CodeGenerator.cpp
 )
 
 # Add Parser test executable
@@ -68,6 +72,8 @@ add_executable(test_parser
     src/frontend/ast/AST.cpp
     src/common/errors/ErrorHandler.cpp
     src/common/Token.cpp
+    src/backend/bytecode/Bytecode.cpp
+    src/backend/codegen/CodeGenerator.cpp
 )
 
 # Add Semantic Analyzer test executable
@@ -76,11 +82,25 @@ add_executable(test_semantic_analyzer
     src/RGLite.cpp
     src/common/utils/StringUtils.cpp
     src/frontend/lexer/Lexer.cpp
+    src/common/errors/ErrorHandler.cpp
+    src/common/Token.cpp
+    src/backend/bytecode/Bytecode.cpp
+    src/backend/codegen/CodeGenerator.cpp
+)
+
+# Add Bytecode test executable
+add_executable(test_bytecode
+    tests/test_bytecode.cpp
+    src/RGLite.cpp
+    src/common/utils/StringUtils.cpp
+    src/frontend/lexer/Lexer.cpp
+    src/common/errors/ErrorHandler.cpp
+    src/common/Token.cpp
     src/frontend/parser/Parser.cpp
     src/frontend/ast/AST.cpp
     src/frontend/semantic/SemanticAnalyzer.cpp
-    src/common/errors/ErrorHandler.cpp
-    src/common/Token.cpp
+    src/backend/bytecode/Bytecode.cpp
+    src/backend/codegen/CodeGenerator.cpp
 )
 
 # Add Indentation test executable

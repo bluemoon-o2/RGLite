@@ -1,3 +1,15 @@
+<div align="center">
+    <p>
+        <img src="./docs/img/banner%20(4).png" alt="RGLite Banner">
+    </p>
+
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/bluemoon-o2/RGLite)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)]()
+
+**RGLite 是一种面向初学者与快速开发场景的解释型编程语言，语法贴近 Python 使用习惯，旨在提供简单、直观的编程体验。**
+</div>
+
 # 贡献指南
 
 我们欢迎所有形式的贡献！无论是报告问题、提出功能建议、改进文档还是提交代码，我们都非常感谢您的参与。

@@ -1,4 +1,11 @@
-# RGLite - Lightweight Programming Language
+<div align="center">
+    <p>
+        <img src="./docs/img/banner%20(4).png" alt="RGLite Banner">
+    </p>
+
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/bluemoon-o2/RGLite)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)]()
 
 [![Build and Test](https://github.com/bluemoon-o2/RGLite/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/bluemoon-o2/RGLite/actions/workflows/build-and-test.yml)
 [![Code Quality](https://github.com/bluemoon-o2/RGLite/actions/workflows/code-quality.yml/badge.svg)](https://github.com/bluemoon-o2/RGLite/actions/workflows/code-quality.yml)
@@ -6,15 +13,11 @@
 [![Benchmark](https://github.com/bluemoon-o2/RGLite/actions/workflows/benchmark.yml/badge.svg)](https://github.com/bluemoon-o2/RGLite/actions/workflows/benchmark.yml)
 [![Release](https://github.com/bluemoon-o2/RGLite/actions/workflows/release.yml/badge.svg)](https://github.com/bluemoon-o2/RGLite/actions/workflows/release.yml)
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/bluemoon-o2/RGLite)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)]()
+**RGLite is an interpreted, dynamically-typed, object-oriented programming language designed for beginners and rapid development scenarios, with syntax that closely follows Python conventions to provide a simple, intuitive programming experience.**
+</div>
 
-## Language Switch
-
+# RGLite - Lightweight Programming Language
 [English](README_EN.md) | [中文](README.md)
-
-RGLite is an interpreted, dynamically-typed, object-oriented programming language designed for beginners and rapid development scenarios, with syntax that closely follows Python conventions to provide a simple, intuitive programming experience.
 
 ## Project Overview
 

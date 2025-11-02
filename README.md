@@ -1,4 +1,7 @@
-# RGLite - 轻量级编程语言
+<div align="center">
+    <p>
+        <img src="./docs/img/banner%20(4).png" alt="RGLite Banner">
+    </p>
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/bluemoon-o2/RGLite)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -10,11 +13,12 @@
 [![Benchmark](https://github.com/bluemoon-o2/RGLite/actions/workflows/benchmark.yml/badge.svg)](https://github.com/bluemoon-o2/RGLite/actions/workflows/benchmark.yml)
 [![Release](https://github.com/bluemoon-o2/RGLite/actions/workflows/release.yml/badge.svg)](https://github.com/bluemoon-o2/RGLite/actions/workflows/release.yml)
 
-## 语言切换 | Language Switch
+**RGLite 是一种面向初学者与快速开发场景的解释型编程语言，语法贴近 Python 使用习惯，旨在提供简单、直观的编程体验。**
+</div>
+
+# RGLite - 轻量级编程语言
 
 [中文](README.md) | [English](README_EN.md)
-
-RGLite 是一种面向初学者与快速开发场景的解释型编程语言，语法贴近 Python 使用习惯，旨在提供简单、直观的编程体验。
 
 ## 项目概述
 
