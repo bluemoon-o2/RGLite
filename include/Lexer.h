@@ -87,6 +87,7 @@ private:
     bool atLineStart_;
     bool pendingDedents_;
     int currentIndent_;
+    int targetIndentLevel_;
     
     /**
      * @brief Advance to the next character

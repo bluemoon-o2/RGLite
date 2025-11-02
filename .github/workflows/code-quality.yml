@@ -1,0 +1,45 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install clang-format
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang-format
+        
+    - name: Check code formatting
+      run: |
+        find src include tests -name "*.cpp" -o -name "*.h" | xargs clang-format --dry-run --Werror
+        
+    - name: Install cppcheck
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cppcheck
+        
+    - name: Run static analysis
+      run: |
+        cppcheck --enable=all --error-exitcode=1 --suppress=missingIncludeSystem src/ include/ tests/
+        
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+        
+    - name: Install Python dependencies
+      run: |
+        pip install flake8
+        
+    - name: Check Python code style
+      run: |
+        find . -name "*.py" -not -path "./.git/*" | xargs flake8 --max-line-length=120

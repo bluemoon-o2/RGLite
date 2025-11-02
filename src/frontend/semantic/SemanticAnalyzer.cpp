@@ -351,9 +351,7 @@ void SemanticAnalyzer::analyzeStatement(const std::unique_ptr<Stmt>& stmt) {
         case StmtType::EXPR_STMT:
             analyzeExprStmt(dynamic_cast<ExprStmt*>(stmt.get()));
             break;
-        case StmtType::VAR_DECL:
-            analyzeVarDeclStmt(dynamic_cast<VarDeclStmt*>(stmt.get()));
-            break;
+
         case StmtType::FUNC_DECL:
             analyzeFunctionDeclStmt(dynamic_cast<FunctionDeclStmt*>(stmt.get()));
             break;
@@ -388,69 +386,12 @@ void SemanticAnalyzer::analyzeBlockStmt(BlockStmt* stmt) {
 }
 
 void SemanticAnalyzer::analyzeExprStmt(ExprStmt* stmt) {
-    // Check if this is an assignment expression that could be a variable declaration
-    if (auto binaryExpr = dynamic_cast<BinaryExpr*>(stmt->expression.get())) {
-        if (binaryExpr->op.lexeme == "=" && binaryExpr->left->getType() == ExprType::IDENTIFIER) {
-            auto identifier = dynamic_cast<IdentifierExpr*>(binaryExpr->left.get());
-            
-            // Check if the variable is already defined in current scope
-            auto symbol = symbolTable_->resolve(identifier->name);
-            if (!symbol) {
-                // Variable is not defined in any scope, treat this as a variable declaration
-                auto varDecl = std::make_unique<VarDeclStmt>(identifier->name, 
-                                                            std::move(binaryExpr->right), 
-                                                            identifier->location);
-                analyzeVarDeclStmt(varDecl.get());
-                return;
-            }
-        }
-    }
-    
-    // Regular expression statement
+    // In Python-style, all assignments are treated as expression statements
+    // Variable declaration is implicit through assignment
     analyzeExpression(stmt->expression);
 }
 
-void SemanticAnalyzer::analyzeVarDeclStmt(VarDeclStmt* stmt) {
-    // Analyze initializer
-    Type initType = Type::UNKNOWN;
-    if (stmt->initializer) {
-        initType = analyzeExpression(stmt->initializer);
-        
-        // If there were errors during initializer analysis, don't define the variable
-        if (hasErrors_) {
-            return;
-        }
-    }
-    
-    // Check if variable is already defined in current scope
-    auto currentScope = symbolTable_->getCurrentScope();
-    if (currentScope) {
-        auto symbol = currentScope->resolve(stmt->name);
-        if (symbol) {
-            // If it's a variable in the same scope, it's a redeclaration
-            if (symbol->kind == Symbol::Kind::VARIABLE) {
-                error(stmt->location, "Variable '" + stmt->name + "' is already defined in this scope");
-                return;
-            } else if (symbol->kind == Symbol::Kind::FUNCTION) {
-                error(stmt->location, "'" + stmt->name + "' is already defined as a function in this scope");
-                return;
-            } else if (symbol->kind == Symbol::Kind::PARAMETER) {
-                error(stmt->location, "'" + stmt->name + "' is already defined as a parameter in this scope");
-                return;
-            }
-        }
-    }
-    
-    // Create symbol
-    auto symbol = std::make_unique<Symbol>(Symbol::Kind::VARIABLE, stmt->name, stmt->location);
-    // Mark as initialized only if there's an initializer
-    symbol->isInitialized = (stmt->initializer != nullptr);
-    
-    // Add to symbol table
-    if (!symbolTable_->define(stmt->name, std::move(symbol))) {
-        error(stmt->location, "Failed to define variable '" + stmt->name + "'");
-    }
-}
+
 
 void SemanticAnalyzer::analyzeFunctionDeclStmt(FunctionDeclStmt* stmt) {
     
@@ -507,19 +448,22 @@ void SemanticAnalyzer::analyzeFunctionDeclStmt(FunctionDeclStmt* stmt) {
         }
     }
     
-    // Analyze function body statements using analyzeBlockStmt to ensure proper scope management
-    // This is the key fix: use analyzeBlockStmt instead of directly analyzing statements
+    // Enter new scope for function body
+    symbolTable_->pushScope();
+    
+    // Use analyzeBlockStmt to analyze the function body
+    // This ensures proper handling of nested scopes and function state
     analyzeBlockStmt(stmt->body.get());
     
-    // IMPORTANT FIX: Do NOT exit function scope here
-    // Function state should remain active until the entire function declaration is processed
+    // Exit function scope AFTER analyzing all statements in the function body
     // This ensures that return statements within the function body are correctly analyzed
+    exitFunction();
     
     // Pop the scope for the function body
     symbolTable_->popScope();
     
-    // Exit function scope - do this AFTER popping the scope to maintain correct function state
-    exitFunction();
+    // Pop the scope for the parameters
+    symbolTable_->popScope();
 }
 
 void SemanticAnalyzer::analyzeIfStmt(IfStmt* stmt) {
@@ -554,12 +498,6 @@ void SemanticAnalyzer::analyzeWhileStmt(WhileStmt* stmt) {
 }
 
 void SemanticAnalyzer::analyzeReturnStmt(ReturnStmt* stmt) {
-    // Add debug output to track function state
-    std::cout << "[DEBUG] Analyzing return statement at line " << stmt->location.line 
-              << ", column " << stmt->location.column 
-              << ", isInFunction: " << isInFunction() 
-              << ", currentFunction: " << getCurrentFunction() << std::endl;
-    
     if (!isInFunction()) {
         error(stmt->location, "Return statement outside of function");
         return;
@@ -617,12 +555,9 @@ Type SemanticAnalyzer::analyzeBinaryExpr(BinaryExpr* expr) {
         return Type::UNKNOWN;
     }
     
-    Type leftType = analyzeExpression(expr->left);
-    Type rightType = analyzeExpression(expr->right);
-    
-    // Check assignment
+    // For assignment operations, handle variable creation/update first
     if (expr->op.lexeme == "=") {
-        // Left side must be assignable
+        // Check if left operand is an identifier (valid assignment target)
         if (expr->left->getType() != ExprType::IDENTIFIER) {
             error(expr->op.location, "Invalid assignment target");
             return Type::UNKNOWN;
@@ -633,6 +568,9 @@ Type SemanticAnalyzer::analyzeBinaryExpr(BinaryExpr* expr) {
             error(expr->op.location, "Invalid assignment target");
             return Type::UNKNOWN;
         }
+        
+        // Analyze right side first to get its type
+        Type rightType = analyzeExpression(expr->right);
         
         // Check if variable is already defined
         auto symbol = symbolTable_->resolve(identifier->name);
@@ -668,6 +606,10 @@ Type SemanticAnalyzer::analyzeBinaryExpr(BinaryExpr* expr) {
         
         return rightType;
     }
+    
+    // For non-assignment operations, analyze both sides normally
+    Type leftType = analyzeExpression(expr->left);
+    Type rightType = analyzeExpression(expr->right);
     
     // For non-assignment operations, check if operands contain undefined variables
     // This is where we report errors for undefined variables in expressions
@@ -837,41 +779,22 @@ Type SemanticAnalyzer::analyzeCallExpr(CallExpr* expr) {
 }
 
 void SemanticAnalyzer::enterFunction(const std::string& name, const std::vector<std::string>& /* parameters */) {
-    // Add debug output
-    std::cout << "[DEBUG] ENTERING function: " << name 
-              << ", previous function: " << currentFunction_ 
-              << ", stack size: " << functionStack_.size() << std::endl;
-    
-    // Push the current function state onto the stack
+    // Save current function state
     functionStack_.push({inFunction_, currentFunction_});
     
+    // Set new function state
     inFunction_ = true;
     currentFunction_ = name;
-    
-    // Don't create scope here, as analyzeBlockStmt will create it
-    // symbolTable_->pushScope();
 }
 
 void SemanticAnalyzer::exitFunction() {
-    // Add debug output
-    std::cout << "[DEBUG] EXITING function: " << currentFunction_ 
-              << ", stack size: " << functionStack_.size() << std::endl;
-    
-    // Don't pop scope here, as analyzeBlockStmt will handle it
-    // symbolTable_->popScope();
-    
-    // Restore the previous function state from the stack
     if (!functionStack_.empty()) {
-        auto previousState = functionStack_.top();
+        // Restore previous function state
+        auto [prevInFunction, prevFunction] = functionStack_.top();
         functionStack_.pop();
-        inFunction_ = previousState.first;
-        currentFunction_ = previousState.second;
-        std::cout << "[DEBUG] RESTORED to function: " << currentFunction_ 
-                  << ", isInFunction: " << inFunction_ << std::endl;
-    } else {
-        inFunction_ = false;
-        currentFunction_.clear();
-        std::cout << "[DEBUG] RESTORED to no function" << std::endl;
+        
+        inFunction_ = prevInFunction;
+        currentFunction_ = prevFunction;
     }
 }
 

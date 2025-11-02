@@ -1,0 +1,35 @@
+name: Performance Benchmark
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '0 0 * * 1'  # Run weekly on Monday
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Configure CMake (Release)
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release
+      
+    - name: Build
+      run: cmake --build ${{github.workspace}}/build --config Release
+      
+    - name: Run benchmarks
+      working-directory: ${{github.workspace}}/build
+      run: |
+        echo "Running performance benchmarks..."
+        # Add specific benchmark commands here
+        
+    - name: Store benchmark result
+      uses: benchmark-action/github-action-benchmark@v1
+      if: github.ref == 'refs/heads/main'
+      with:
+        tool: 'pytest'
+        output-file-path: benchmark-results.json
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        auto-push: true

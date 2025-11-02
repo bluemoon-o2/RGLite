@@ -38,7 +38,7 @@ Lexer::Lexer(const std::string& source, const std::string& filename,
              std::shared_ptr<ErrorHandler> errorHandler)
     : source_(source), filename_(filename), errorHandler_(errorHandler),
       position_(0), line_(1), column_(1), start_(0),
-      peekedToken_(), hasPeeked_(false), atLineStart_(true), pendingDedents_(false), currentIndent_(0) {
+      peekedToken_(), hasPeeked_(false), atLineStart_(true), pendingDedents_(false), currentIndent_(0), targetIndentLevel_(0) {
     
     if (!errorHandler_) {
         errorHandler_ = std::make_shared<StandardErrorHandler>();
@@ -90,6 +90,8 @@ Token Lexer::nextToken() {
         // Handle end of file - generate any pending dedents
         if (!indentStack_.empty() && indentStack_.back() > 0) {
             pendingDedents_ = true;
+            // Set target indentation level to 0 for EOF
+            targetIndentLevel_ = 0;
             return handleDedents();
         }
         
@@ -554,9 +556,20 @@ Token Lexer::handleLineStart() {
         currentIndent_ = indentLevel;
         return makeToken(TokenType::INDENT);
     } else if (indentLevel < currentLevel) {
-        // Decrease indentation - mark as pending
+        // Decrease indentation - generate only one DEDENT at a time
         pendingDedents_ = true;
-        return handleDedents();
+        // Set target to one level less than current (not the final target)
+        targetIndentLevel_ = currentLevel - 1;
+        // Pop one level from the stack
+        indentStack_.pop_back();
+        currentIndent_ = indentStack_.back();
+        // Check if we need more DEDENTs
+        if (indentStack_.back() > indentLevel) {
+            pendingDedents_ = true;
+        } else {
+            pendingDedents_ = false;
+        }
+        return makeToken(TokenType::DEDENT);
     } else {
         // Same indentation level, continue with normal token
         return nextToken();
@@ -568,76 +581,18 @@ Token Lexer::handleDedents() {
         return nextToken();
     }
     
-    // Calculate current indentation level
-    int indentLevel = 0;
-    bool hasSpaces = false;
-    bool hasTabs = false;
-    
-    // Save current position
-    size_t savedPos = position_;
-    size_t savedLine = line_;
-    size_t savedColumn = column_;
-    
-    // Set start_ for DEDENT token creation
-    start_ = position_;
-    
-    // Calculate the actual indentation of the current line
-    while (!isAtEnd()) {
-        char c = peek();
-        if (c == ' ') {
-            indentLevel++;
-            hasSpaces = true;
-            advance();
-        } else if (c == '\t') {
-            // Treat tabs as 4 spaces (Python convention)
-            indentLevel += 4;
-            hasTabs = true;
-            advance();
-        } else if (c == '\n') {
-            // Empty line, skip it and continue with next line
-            advance();
-            line_++;
-            column_ = 1;
-            // Continue processing the next line's indentation
-            indentLevel = 0;
-            hasSpaces = false;
-            hasTabs = false;
-        } else {
-            break;
-        }
-    }
-    
-    // Restore position
-    position_ = savedPos;
-    line_ = savedLine;
-    column_ = savedColumn;
-    
-    // Also restore start_ to the saved position for proper column calculation
-    start_ = savedPos;
-    
-    // Check for mixed indentation (spaces and tabs in the same line)
-    if (hasSpaces && hasTabs) {
-        error("Mixed indentation: tabs and spaces cannot be mixed");
-        // Continue processing despite the error
-    }
-    
-    // Generate DEDENT tokens until we match the current indentation
-    if (indentStack_.size() > 1 && indentStack_.back() > indentLevel) {
+    // Generate DEDENT tokens until we match the target indentation
+    if (indentStack_.size() > 1 && indentStack_.back() > targetIndentLevel_) {
         // Pop from stack
         indentStack_.pop_back();
         currentIndent_ = indentStack_.back();
         
-        // Check if the new stack top matches the current indentation level
-        if (currentIndent_ == indentLevel) {
-            // Perfect match, no more DEDENTs needed
-            pendingDedents_ = false;
-        } else if (currentIndent_ > indentLevel) {
-            // Still need more DEDENTs, keep pending
+        // Check if we need more DEDENTs
+        if (indentStack_.back() > targetIndentLevel_) {
+            // Set pending flag to check if we need more DEDENTs in the next call
             pendingDedents_ = true;
         } else {
-            // This should not happen - currentIndent_ < indentLevel
-            // This means we've popped too much, which is an error
-            error("Indentation error: inconsistent indentation levels");
+            // We've reached the target indentation level, reset the pending flag
             pendingDedents_ = false;
         }
         

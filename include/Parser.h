@@ -60,7 +60,6 @@ private:
     // Grammar rules
     std::unique_ptr<Stmt> parseStatement();
     std::unique_ptr<ExprStmt> parseExpressionStatement();
-    std::unique_ptr<VarDeclStmt> parseVariableDeclaration();
     std::unique_ptr<FunctionDeclStmt> parseFunctionDefinition();
     std::unique_ptr<IfStmt> parseIfStatement();
     std::unique_ptr<WhileStmt> parseWhileStatement();

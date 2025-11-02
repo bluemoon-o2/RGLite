@@ -78,13 +78,6 @@ public:
         stmt.expression->accept(*this);
     }
     
-    void visitVarDeclStmt(VarDeclStmt& stmt) override {
-        visitedNodes.push_back("VarDeclStmt(" + stmt.name + ")");
-        if (stmt.initializer) {
-            stmt.initializer->accept(*this);
-        }
-    }
-    
     void visitBlockStmt(BlockStmt& stmt) override {
         visitedNodes.push_back("BlockStmt");
         for (auto& s : stmt.statements) {
@@ -150,17 +143,6 @@ TEST(ASTSuite, BinaryExprCreation) {
     EXPECT_EQ(expr.toString(), "BinaryExpr(IdentifierExpr(x) + IdentifierExpr(y))");
     EXPECT_EQ(expr.getLocation().line, 1);
     EXPECT_EQ(expr.getLocation().column, 3);
-}
-
-TEST(ASTSuite, VarDeclStmtCreation) {
-    SourceLocation loc{1, 1};
-    auto initializer = std::make_unique<IdentifierExpr>("x", loc);
-    
-    VarDeclStmt stmt("myVar", std::move(initializer), loc);
-    
-    EXPECT_EQ(stmt.toString(), "VarDeclStmt(myVar = IdentifierExpr(x))");
-    EXPECT_EQ(stmt.getLocation().line, 1);
-    EXPECT_EQ(stmt.getLocation().column, 1);
 }
 
 // Test suite for parser functionality

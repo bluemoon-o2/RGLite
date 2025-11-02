@@ -83,7 +83,7 @@ TEST(IndentSuite, NestedIndentation) {
     fixture.SetUp();
     
     bool result = fixture.testIndentation(
-        "if x > 0:\n    if y > 0:\n        print(x + y)",
+        "x = 10\ndef outer():\n    x = 20\n    def inner():\n        x = 30\n        return x\n    return inner()\n",
         "Nested indentation"
     );
     

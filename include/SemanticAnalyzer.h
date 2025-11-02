@@ -176,7 +176,6 @@ private:
     void analyzeStatement(const std::unique_ptr<Stmt>& stmt);
     void analyzeBlockStmt(BlockStmt* stmt);
     void analyzeExprStmt(ExprStmt* stmt);
-    void analyzeVarDeclStmt(VarDeclStmt* stmt);
     void analyzeFunctionDeclStmt(FunctionDeclStmt* stmt);
     void analyzeIfStmt(IfStmt* stmt);
     void analyzeWhileStmt(WhileStmt* stmt);

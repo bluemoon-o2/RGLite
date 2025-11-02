@@ -70,6 +70,16 @@ TEST_F(SemanticAnalyzerSuite, VariableDeclarationWithExpression, SemanticAnalyze
 
 TEST_F(SemanticAnalyzerSuite, VariableRedeclaration, SemanticAnalyzerTestFixture) {
     EXPECT_TRUE(parseAndAnalyze("x = 42\nx = 10\n"));
+    
+    // Debug: print errors if any
+    if (hasErrors()) {
+        std::cout << "[DEBUG] Errors detected in VariableRedeclaration test:" << std::endl;
+        const auto& diagnostics = errorHandler->getDiagnostics();
+        for (const auto& diag : diagnostics) {
+            std::cout << "  " << diag.toString() << std::endl;
+        }
+    }
+    
     EXPECT_FALSE(hasErrors()); // reassignment is allowed
 }
 
@@ -185,6 +195,16 @@ TEST_F(SemanticAnalyzerSuite, AssignmentToUndefined, SemanticAnalyzerTestFixture
 // Test suite for nested scopes
 TEST_F(SemanticAnalyzerSuite, NestedFunctionScopes, SemanticAnalyzerTestFixture) {
     EXPECT_TRUE(parseAndAnalyze("x = 10\ndef outer():\n    x = 20\n    def inner():\n        x = 30\n        return x\n    return inner()\n"));
+    
+    // Debug: print errors if any
+    if (hasErrors()) {
+        std::cout << "[DEBUG] Errors detected in NestedFunctionScopes test:" << std::endl;
+        const auto& diagnostics = errorHandler->getDiagnostics();
+        for (const auto& diag : diagnostics) {
+            std::cout << "  " << diag.toString() << std::endl;
+        }
+    }
+    
     EXPECT_FALSE(hasErrors());
 }
 

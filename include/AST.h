@@ -30,7 +30,6 @@ enum class ExprType {
  */
 enum class StmtType {
     EXPR_STMT,
-    VAR_DECL,
     BLOCK,
     IF_STMT,
     WHILE_STMT,
@@ -178,22 +177,6 @@ public:
     StmtType getType() const override { return StmtType::EXPR_STMT; }
 };
 
-class VarDeclStmt : public Stmt {
-public:
-    std::string name;
-    std::unique_ptr<Expr> initializer;
-    SourceLocation location;
-    
-    VarDeclStmt(const std::string& n, std::unique_ptr<Expr> init, 
-                const SourceLocation& loc)
-        : name(n), initializer(std::move(init)), location(loc) {}
-    
-    void accept(ASTVisitor& visitor) override;
-    SourceLocation getLocation() const override { return location; }
-    std::string toString() const override;
-    StmtType getType() const override { return StmtType::VAR_DECL; }
-};
-
 class BlockStmt : public Stmt {
 public:
     std::vector<std::unique_ptr<Stmt>> statements;
@@ -289,7 +272,6 @@ public:
     
     // Statement visitors
     virtual void visitExprStmt(ExprStmt& stmt) = 0;
-    virtual void visitVarDeclStmt(VarDeclStmt& stmt) = 0;
     virtual void visitBlockStmt(BlockStmt& stmt) = 0;
     virtual void visitIfStmt(IfStmt& stmt) = 0;
     virtual void visitWhileStmt(WhileStmt& stmt) = 0;

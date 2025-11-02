@@ -129,12 +129,8 @@ std::unique_ptr<Stmt> Parser::parseStatement() {
         return parseReturnStatement();
     }
     
-    // Check for variable declaration: identifier followed by assignment operator
-    if (checkToken(TokenType::IDENTIFIER) && checkNextToken(TokenType::OP_ASSIGN)) {
-        return parseVariableDeclaration();
-    }
-    
-    // All other statements are expression statements
+    // In Python-style, all identifier = expression are treated as expression statements
+    // Variable declaration is implicit through assignment
     return parseExpressionStatement();
 }
 
@@ -142,17 +138,6 @@ std::unique_ptr<ExprStmt> Parser::parseExpressionStatement() {
     auto expr = parseExpression();
     expectToken(TokenType::NEWLINE);
     return std::make_unique<ExprStmt>(std::move(expr));
-}
-
-std::unique_ptr<VarDeclStmt> Parser::parseVariableDeclaration() {
-    auto nameToken = currentToken_;
-    expectToken(TokenType::IDENTIFIER);
-    expectToken(TokenType::OP_ASSIGN);
-    
-    auto initializer = parseExpression();
-    expectToken(TokenType::NEWLINE);
-    
-    return std::make_unique<VarDeclStmt>(nameToken.lexeme, std::move(initializer), nameToken.location);
 }
 
 std::unique_ptr<FunctionDeclStmt> Parser::parseFunctionDefinition() {
@@ -418,6 +403,12 @@ std::unique_ptr<BlockStmt> Parser::parseBlock() {
         // If we encounter an INDENT, it means we're entering a nested block
         if (checkToken(TokenType::INDENT)) {
             currentIndentLevel++;
+            nextToken();
+            continue;
+        }
+        
+        // Skip NEWLINE tokens as they don't contain statements
+        if (checkToken(TokenType::NEWLINE)) {
             nextToken();
             continue;
         }

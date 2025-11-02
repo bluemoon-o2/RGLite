@@ -93,6 +93,16 @@ add_executable(test_indent
     src/common/Token.cpp
 )
 
+# Add Nested Function Indent debug executable
+add_executable(debug_nested_indent
+    tests/debug_nested_indent.cpp
+    src/RGLite.cpp
+    src/common/utils/StringUtils.cpp
+    src/frontend/lexer/Lexer.cpp
+    src/common/errors/ErrorHandler.cpp
+    src/common/Token.cpp
+)
+
 add_executable(test_framework_debug
     tests/test_framework_debug.cpp
 )
@@ -104,6 +114,9 @@ add_executable(test_complex_fixture
 # Testing configuration
 if(BUILD_TESTING)
     enable_testing()
+
+    # Add tests
+    add_subdirectory(tests)
     
     # Find GoogleTest
     find_package(GTest REQUIRED)

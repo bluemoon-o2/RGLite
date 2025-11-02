@@ -72,15 +72,6 @@ std::string ExprStmt::toString() const {
     return "ExprStmt(" + expression->toString() + ")";
 }
 
-// VarDeclStmt implementation
-void VarDeclStmt::accept(ASTVisitor& visitor) {
-    visitor.visitVarDeclStmt(*this);
-}
-
-std::string VarDeclStmt::toString() const {
-    return "VarDeclStmt(" + name + " = " + initializer->toString() + ")";
-}
-
 // BlockStmt implementation
 void BlockStmt::accept(ASTVisitor& visitor) {
     visitor.visitBlockStmt(*this);

@@ -84,13 +84,13 @@ TEST_F(ParserSuite, ParenthesizedExpression, ParserTestFixture) {
 
 // Test suite for variable declaration parsing
 TEST_F(ParserSuite, VariableDeclaration, ParserTestFixture) {
-    parseAndValidate("x = 42\n", "VarDeclStmt(x = LiteralExpr(42))");
+    parseAndValidate("x = 42\n", "ExprStmt(BinaryExpr(IdentifierExpr(x) = LiteralExpr(42)))");
     EXPECT_FALSE(parser->hasErrors());
 }
 
 TEST_F(ParserSuite, VariableDeclarationWithExpression, ParserTestFixture) {
     parseAndValidate("result = a + b\n", 
-        "VarDeclStmt(result = BinaryExpr(IdentifierExpr(a) + IdentifierExpr(b)))");
+        "ExprStmt(BinaryExpr(IdentifierExpr(result) = BinaryExpr(IdentifierExpr(a) + IdentifierExpr(b))))");
     EXPECT_FALSE(parser->hasErrors());
 }
 
@@ -116,7 +116,7 @@ TEST_F(ParserSuite, IfStatement, ParserTestFixture) {
 
 TEST_F(ParserSuite, WhileStatement, ParserTestFixture) {
     parseAndValidate("while x < 10:\n    x = x + 1\n", 
-        "WhileStmt(condition: BinaryExpr(IdentifierExpr(x) < LiteralExpr(10)), body: BlockStmt([VarDeclStmt(x = BinaryExpr(IdentifierExpr(x) + LiteralExpr(1)))]))");
+        "WhileStmt(condition: BinaryExpr(IdentifierExpr(x) < LiteralExpr(10)), body: BlockStmt([ExprStmt(BinaryExpr(IdentifierExpr(x) = BinaryExpr(IdentifierExpr(x) + LiteralExpr(1))))]))");
     EXPECT_FALSE(parser->hasErrors());
 }
 
@@ -150,7 +150,7 @@ TEST_F(ParserSuite, MultipleStatements, ParserTestFixture) {
     auto stmt = parser->parse();
     
     EXPECT_NE(stmt, nullptr);
-    EXPECT_EQ("BlockStmt([VarDeclStmt(x = LiteralExpr(10)), VarDeclStmt(y = LiteralExpr(20)), VarDeclStmt(result = BinaryExpr(IdentifierExpr(x) + IdentifierExpr(y)))])", stmt->toString());
+    EXPECT_EQ("BlockStmt([ExprStmt(BinaryExpr(IdentifierExpr(x) = LiteralExpr(10))), ExprStmt(BinaryExpr(IdentifierExpr(y) = LiteralExpr(20))), ExprStmt(BinaryExpr(IdentifierExpr(result) = BinaryExpr(IdentifierExpr(x) + IdentifierExpr(y))))])", stmt->toString());
     EXPECT_FALSE(parser->hasErrors());
 }
 
