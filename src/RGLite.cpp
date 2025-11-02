@@ -40,7 +40,7 @@ int Compiler::execute(const std::string& source) {
     // Compile and execute in one step
     
     // Placeholder implementation
-    printf(source.c_str());
+    std::cout << source << std::endl;
     return 0;
 }
 

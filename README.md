@@ -3,6 +3,7 @@
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/bluemoon-o2/RGLite)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)]()
+
 [![Build and Test](https://github.com/bluemoon-o2/RGLite/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/bluemoon-o2/RGLite/actions/workflows/build-and-test.yml)
 [![Code Quality](https://github.com/bluemoon-o2/RGLite/actions/workflows/code-quality.yml/badge.svg)](https://github.com/bluemoon-o2/RGLite/actions/workflows/code-quality.yml)
 [![Documentation](https://github.com/bluemoon-o2/RGLite/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/bluemoon-o2/RGLite/actions/workflows/deploy-docs.yml)
@@ -11,7 +12,7 @@
 
 ## 语言切换 | Language Switch
 
-[中文](README_CN.md) | [English](README_EN.md)
+[中文](README.md) | [English](README_EN.md)
 
 RGLite 是一种面向初学者与快速开发场景的解释型编程语言，语法贴近 Python 使用习惯，旨在提供简单、直观的编程体验。
 

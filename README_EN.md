@@ -10,9 +10,9 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)]()
 
-## Language Switch | 语言切换
+## Language Switch
 
-[English](README_EN.md) | [中文](README_CN.md)
+[English](README_EN.md) | [中文](README.md)
 
 RGLite is an interpreted, dynamically-typed, object-oriented programming language designed for beginners and rapid development scenarios, with syntax that closely follows Python conventions to provide a simple, intuitive programming experience.
 
@@ -25,43 +25,43 @@ RGLite is an interpreted, dynamically-typed, object-oriented programming languag
   - Supports rapid script development to reduce coding costs
 - **Environment Requirements**: Cross-platform (Windows/macOS/Linux), requires RGLite interpreter (approximately 5MB lightweight package)
 
-## Quick Start | 快速开始
+## Quick Start
 
-### Build Project | 构建项目
+### Build Project
 
 ```bash
-# Clone repository | 克隆仓库
+# Clone repository
 git clone https://github.com/bluemoon-o2/RGLite.git
 cd RGLite
 
-# Create build directory | 创建构建目录
+# Create build directory
 mkdir build
 cd build
 
-# Configure CMake | 配置CMake
+# Configure CMake
 cmake ..
 
-# Build project | 构建项目
+# Build project
 cmake --build .
 ```
 
-### Run Tests | 运行测试
+### Run Tests
 
 ```bash
-# Run all tests in build directory | 在build目录下运行所有测试
+# Run all tests in build directory
 ctest
 
-# Run specific tests | 运行特定测试
+# Run specific tests
 ctest -R LexerTest
 ctest -R ParserTest
 ctest -R SemanticAnalyzerTest
 ctest -R ASTTest
 
-# Verbose output | 详细输出
+# Verbose output
 ctest --output-on-failure
 ```
 
-### GitHub Actions | GitHub Actions
+### GitHub Actions
 
 This project uses GitHub Actions for continuous integration and deployment, including:
 - Multi-platform build and test (Ubuntu, Windows, macOS)
@@ -71,15 +71,6 @@ This project uses GitHub Actions for continuous integration and deployment, incl
 - Automated release process
 
 For detailed usage instructions, see: [GitHub Actions Configuration and Usage Guide](docs/GitHub_Actions.md)
-
-本项目使用GitHub Actions进行持续集成和部署，包括：
-- 多平台构建和测试（Ubuntu、Windows、macOS）
-- 代码质量检查（格式化、静态分析）
-- 文档自动部署
-- 性能基准测试
-- 自动化发布流程
-
-详细使用说明请参考：[GitHub Actions 配置和使用指南](docs/GitHub_Actions.md)
 
 ## Language Features
 
