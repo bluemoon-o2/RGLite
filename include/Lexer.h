@@ -66,6 +66,21 @@ public:
      */
     SourceLocation getCurrentLocation() const;
     
+    /**
+     * @brief Get the source code
+     * @return The source code string
+     */
+    const std::string& getSource() const;
+    
+    /**
+     * @brief Get the source filename
+     * @return The filename string
+     */
+    const std::string& getFilename() const;
+
+    // Set a shared error handler (to unify with parser)
+    void setErrorHandler(std::shared_ptr<ErrorHandler> handler);
+    
 private:
     // Source code and position tracking
     std::string source_;
@@ -88,6 +103,7 @@ private:
     bool pendingDedents_;
     int currentIndent_;
     int targetIndentLevel_;
+    int pending_dedent_count_;
     
     /**
      * @brief Advance to the next character
@@ -203,4 +219,4 @@ private:
 
 } // namespace rglite
 
-#endif // LEXER_H
+#endif // LEXER_H

@@ -12,12 +12,27 @@
 #include <unordered_map>
 #include <variant>
 #include <stack>
+#include <sstream>
 
 namespace rglite {
 
 // Forward declarations
 class SymbolTable;
 class TypeChecker;
+/**
+ * @brief Type information for expressions
+ */
+enum class Type : uint8_t {
+    INTEGER,
+    FLOAT,
+    STRING,
+    BOOLEAN,
+    NONE,
+    FUNCTION,
+    LIST,
+    DICT,
+    UNKNOWN
+};
 
 /**
  * @brief Symbol information for variables and functions
@@ -30,14 +45,14 @@ struct Symbol {
         BUILTIN
     };
     
-    // Alias for backward compatibility
-    using Type = Kind;
-    
     Kind kind;
     std::string name;
     SourceLocation location;
     bool isInitialized = false;
     bool used = false;
+    
+    // Inferred type for variables/parameters; explicitly set in analysis
+    Type type;
     
     // For functions
     std::vector<std::string> parameters;
@@ -96,18 +111,7 @@ private:
     std::shared_ptr<Scope> currentScope_;
 };
 
-/**
- * @brief Type information for expressions
- */
-enum class Type {
-    INTEGER,
-    FLOAT,
-    STRING,
-    BOOLEAN,
-    NONE,
-    FUNCTION,
-    UNKNOWN
-};
+// (Moved Type definition above Symbol)
 
 /**
  * @brief Type checker for RGLite expressions
@@ -123,11 +127,13 @@ public:
     Type checkUnaryOperation(Type operand, const std::string& op);
     Type checkFunctionCall(const std::string& name, const std::vector<Type>& argTypes);
     Type checkFunctionCall(Symbol* symbol, const std::vector<std::unique_ptr<Expr>>& args);
+    Type checkIndexAccess(Type objectType, Type indexType);
     
     // Type utilities
     std::string typeToString(Type type) const;
     bool isAssignable(Type type) const;
     bool isNumeric(Type type) const;
+    bool isCollection(Type type) const;
     
 private:
     std::shared_ptr<ErrorHandler> errorHandler_;
@@ -158,6 +164,14 @@ public:
      * @brief Get the symbol table for inspection
      */
     std::shared_ptr<SymbolTable> getSymbolTable() const { return symbolTable_; }
+
+    /**
+     * @brief Provide source text and filename for accurate caret and source line in diagnostics
+     */
+    void setSource(const std::string& source, const std::string& filename) {
+        source_ = source;
+        filename_ = filename;
+    }
     
 private:
     // Error handling
@@ -172,13 +186,14 @@ private:
     void error(const std::string& message, const SourceLocation& location);
     void error(const SourceLocation& location, const std::string& message);
     
-    // Statement analysis methods
+    // Statement analysis
     void analyzeStatement(const std::unique_ptr<Stmt>& stmt);
     void analyzeBlockStmt(BlockStmt* stmt);
     void analyzeExprStmt(ExprStmt* stmt);
     void analyzeFunctionDeclStmt(FunctionDeclStmt* stmt);
     void analyzeIfStmt(IfStmt* stmt);
     void analyzeWhileStmt(WhileStmt* stmt);
+    void analyzeForStmt(ForStmt* stmt);
     void analyzeReturnStmt(ReturnStmt* stmt);
     
     // Expression analysis
@@ -188,6 +203,9 @@ private:
     Type analyzeLiteralExpr(LiteralExpr* expr);
     std::shared_ptr<Symbol> analyzeIdentifierExpr(IdentifierExpr* expr);
     Type analyzeCallExpr(CallExpr* expr);
+    Type analyzeListExpr(ListExpr* expr);
+    Type analyzeDictExpr(DictExpr* expr);
+    Type analyzeIndexAccessExpr(IndexAccessExpr* expr);
     
     // Helper methods
     void enterFunction(const std::string& name, const std::vector<std::string>& parameters);
@@ -202,6 +220,25 @@ private:
     bool inFunction_ = false;
     std::string currentFunction_;
     std::stack<std::pair<bool, std::string>> functionStack_;
+
+    // Source context for diagnostics
+    std::string source_;
+    std::string filename_;
+
+    // Helper to fetch a specific line from source
+    std::string getSourceLine(int line) const {
+        if (source_.empty()) return std::string();
+        std::istringstream iss(source_);
+        std::string currentLine;
+        int currentLineNum = 1;
+        while (std::getline(iss, currentLine)) {
+            if (currentLineNum == line) {
+                return currentLine;
+            }
+            currentLineNum++;
+        }
+        return std::string();
+    }
 };
 
 } // namespace rglite

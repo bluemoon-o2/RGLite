@@ -1,0 +1,32 @@
+def selection_sort(arr):
+    temp = []
+    i = 0
+    while i < len(arr):
+        temp.append(arr[i])
+        i = i + 1
+    result = []
+    n = len(temp)
+    while n > 0:
+        min_idx = 0
+        min_val = temp[0]
+        j = 1
+        while j < n:
+            if temp[j] < min_val:
+                min_idx = j
+                min_val = temp[j]
+            j = j + 1
+        result.append(min_val)
+        # rebuild temp excluding the selected min element
+        new_temp = []
+        k = 0
+        while k < n:
+            if k != min_idx:
+                new_temp.append(temp[k])
+            k = k + 1
+        temp = new_temp
+        n = len(temp)
+    return result
+
+data = [5, 2, 8, 1, 3, 7, 4, 6]
+sorted_data = selection_sort(data)
+print(sorted_data)

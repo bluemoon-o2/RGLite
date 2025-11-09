@@ -29,43 +29,43 @@
   - 支持快速脚本开发，降低编码成本
 - **依赖环境**: 跨平台（Windows/macOS/Linux），需安装RGLite解释器（约5MB轻量包）
 
-## 快速开始 | Quick Start
+## 快速开始
 
-### 构建项目 | Build Project
+### 构建项目
 
 ```bash
-# 克隆仓库 | Clone repository
+# 克隆仓库
 git clone https://github.com/bluemoon-o2/RGLite.git
 cd RGLite
 
-# 创建构建目录 | Create build directory
+# 创建构建目录
 mkdir build
 cd build
 
-# 配置CMake | Configure CMake
+# 配置CMake
 cmake ..
 
-# 构建项目 | Build project
+# 构建项目
 cmake --build .
 ```
 
-### 运行测试 | Run Tests
+### 运行测试
 
 ```bash
-# 在build目录下运行所有测试 | Run all tests in build directory
+# 在build目录下运行所有测试
 ctest
 
-# 运行特定测试 | Run specific tests
+# 运行特定测试
 ctest -R LexerTest
 ctest -R ParserTest
 ctest -R SemanticAnalyzerTest
 ctest -R ASTTest
 
-# 详细输出 | Verbose output
+# 详细输出
 ctest --output-on-failure
 ```
 
-### GitHub Actions | GitHub Actions
+### GitHub Actions
 
 本项目使用GitHub Actions进行持续集成和部署，包括：
 - 多平台构建和测试（Ubuntu、Windows、macOS）
@@ -75,15 +75,6 @@ ctest --output-on-failure
 - 自动化发布流程
 
 详细使用说明请参考：[GitHub Actions 配置和使用指南](docs/GitHub_Actions.md)
-
-This project uses GitHub Actions for continuous integration and deployment, including:
-- Multi-platform build and test (Ubuntu, Windows, macOS)
-- Code quality checks (formatting, static analysis)
-- Automatic documentation deployment
-- Performance benchmarking
-- Automated release process
-
-For detailed usage instructions, see: [GitHub Actions Configuration and Usage Guide](docs/GitHub_Actions.md)
 
 ## 语言特性
 

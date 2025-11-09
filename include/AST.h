@@ -22,7 +22,13 @@ enum class ExprType {
     IDENTIFIER,
     BINARY,
     UNARY,
-    CALL
+    CALL,
+    LIST,
+    DICT,
+    TUPLE,
+    SET,
+    MEMBER_ACCESS,
+    INDEX_ACCESS
 };
 
 /**
@@ -33,6 +39,7 @@ enum class StmtType {
     BLOCK,
     IF_STMT,
     WHILE_STMT,
+    FOR_STMT,
     FUNC_DECL,
     RETURN_STMT
 };
@@ -164,6 +171,94 @@ public:
     ExprType getType() const override { return ExprType::UNARY; }
 };
 
+class ListExpr : public Expr {
+public:
+    std::vector<std::unique_ptr<Expr>> elements;
+    SourceLocation location;
+    
+    ListExpr(std::vector<std::unique_ptr<Expr>> elems, const SourceLocation& loc)
+        : elements(std::move(elems)), location(loc) {}
+    
+    void accept(ASTVisitor& visitor) override;
+    SourceLocation getLocation() const override { return location; }
+    std::string toString() const override;
+    ExprType getType() const override { return ExprType::LIST; }
+};
+
+class DictExpr : public Expr {
+public:
+    std::vector<std::unique_ptr<Expr>> keys;
+    std::vector<std::unique_ptr<Expr>> values;
+    SourceLocation location;
+    
+    DictExpr(std::vector<std::unique_ptr<Expr>> k, std::vector<std::unique_ptr<Expr>> v, 
+             const SourceLocation& loc)
+        : keys(std::move(k)), values(std::move(v)), location(loc) {}
+    
+    void accept(ASTVisitor& visitor) override;
+    SourceLocation getLocation() const override { return location; }
+    std::string toString() const override;
+    ExprType getType() const override { return ExprType::DICT; }
+};
+
+class TupleExpr : public Expr {
+public:
+    std::vector<std::unique_ptr<Expr>> elements;
+    SourceLocation location;
+    
+    TupleExpr(std::vector<std::unique_ptr<Expr>> elems, const SourceLocation& loc)
+        : elements(std::move(elems)), location(loc) {}
+    
+    void accept(ASTVisitor& visitor) override;
+    SourceLocation getLocation() const override { return location; }
+    std::string toString() const override;
+    ExprType getType() const override { return ExprType::TUPLE; }
+};
+
+class SetExpr : public Expr {
+public:
+    std::vector<std::unique_ptr<Expr>> elements;
+    SourceLocation location;
+    
+    SetExpr(std::vector<std::unique_ptr<Expr>> elems, const SourceLocation& loc)
+        : elements(std::move(elems)), location(loc) {}
+    
+    void accept(ASTVisitor& visitor) override;
+    SourceLocation getLocation() const override { return location; }
+    std::string toString() const override;
+    ExprType getType() const override { return ExprType::SET; }
+};
+
+class MemberAccessExpr : public Expr {
+public:
+    std::unique_ptr<Expr> object;
+    std::string member;
+    SourceLocation location;
+    
+    MemberAccessExpr(std::unique_ptr<Expr> obj, const std::string& mem, const SourceLocation& loc)
+        : object(std::move(obj)), member(mem), location(loc) {}
+    
+    void accept(ASTVisitor& visitor) override;
+    SourceLocation getLocation() const override { return location; }
+    std::string toString() const override;
+    ExprType getType() const override { return ExprType::MEMBER_ACCESS; }
+};
+
+class IndexAccessExpr : public Expr {
+public:
+    std::unique_ptr<Expr> object;
+    std::unique_ptr<Expr> index;
+    SourceLocation location;
+    
+    IndexAccessExpr(std::unique_ptr<Expr> obj, std::unique_ptr<Expr> idx, const SourceLocation& loc)
+        : object(std::move(obj)), index(std::move(idx)), location(loc) {}
+    
+    void accept(ASTVisitor& visitor) override;
+    SourceLocation getLocation() const override { return location; }
+    std::string toString() const override;
+    ExprType getType() const override { return ExprType::INDEX_ACCESS; }
+};
+
 // Statement nodes
 class ExprStmt : public Stmt {
 public:
@@ -225,6 +320,23 @@ public:
     StmtType getType() const override { return StmtType::WHILE_STMT; }
 };
 
+class ForStmt : public Stmt {
+public:
+    std::string variable;  // Loop variable name
+    std::unique_ptr<Expr> iterable;  // Expression to iterate over
+    std::unique_ptr<Stmt> body;  // Loop body
+    SourceLocation location;
+    
+    ForStmt(const std::string& var, std::unique_ptr<Expr> iter, 
+            std::unique_ptr<Stmt> b, const SourceLocation& loc)
+        : variable(var), iterable(std::move(iter)), body(std::move(b)), location(loc) {}
+    
+    void accept(ASTVisitor& visitor) override;
+    SourceLocation getLocation() const override { return location; }
+    std::string toString() const override;
+    StmtType getType() const override { return StmtType::FOR_STMT; }
+};
+
 class FunctionDeclStmt : public Stmt {
 public:
     std::string name;
@@ -269,12 +381,19 @@ public:
     virtual void visitBinaryExpr(BinaryExpr& expr) = 0;
     virtual void visitCallExpr(CallExpr& expr) = 0;
     virtual void visitUnaryExpr(UnaryExpr& expr) = 0;
+    virtual void visitListExpr(ListExpr& expr) = 0;
+    virtual void visitDictExpr(DictExpr& expr) = 0;
+    virtual void visitTupleExpr(TupleExpr& expr) = 0;
+    virtual void visitSetExpr(SetExpr& expr) = 0;
+    virtual void visitMemberAccessExpr(MemberAccessExpr& expr) = 0;
+    virtual void visitIndexAccessExpr(IndexAccessExpr& expr) = 0;
     
     // Statement visitors
     virtual void visitExprStmt(ExprStmt& stmt) = 0;
     virtual void visitBlockStmt(BlockStmt& stmt) = 0;
     virtual void visitIfStmt(IfStmt& stmt) = 0;
     virtual void visitWhileStmt(WhileStmt& stmt) = 0;
+    virtual void visitForStmt(ForStmt& stmt) = 0;
     virtual void visitFunctionDeclStmt(FunctionDeclStmt& stmt) = 0;
     virtual void visitReturnStmt(ReturnStmt& stmt) = 0;
 };

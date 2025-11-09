@@ -489,6 +489,14 @@ void suite_name##_##test_name##_Test::TestBody()
     testing::internal::AssertImpl((val1) > (val2), __FILE__, __LINE__, \
         "Expected: " #val1 " > " #val2 " but it's not")
 
+#define EXPECT_LE(val1, val2) \
+    testing::internal::AssertImpl((val1) <= (val2), __FILE__, __LINE__, \
+        "Expected: " #val1 " <= " #val2 " but it's not")
+
+#define EXPECT_GE(val1, val2) \
+    testing::internal::AssertImpl((val1) >= (val2), __FILE__, __LINE__, \
+        "Expected: " #val1 " >= " #val2 " but it's not")
+
 #define EXPECT_STREQ(expected, actual) \
     testing::internal::AssertEqualImpl(std::string(expected), std::string(actual), __FILE__, __LINE__)
 

@@ -73,6 +73,13 @@ public:
         expr.operand->accept(*this);
     }
     
+    void visitListExpr(ListExpr& expr) override {
+        visitedNodes.push_back("ListExpr");
+        for (auto& elem : expr.elements) {
+            elem->accept(*this);
+        }
+    }
+    
     void visitExprStmt(ExprStmt& stmt) override {
         visitedNodes.push_back("ExprStmt");
         stmt.expression->accept(*this);
@@ -100,6 +107,12 @@ public:
         stmt.body->accept(*this);
     }
     
+    void visitForStmt(ForStmt& stmt) override {
+        visitedNodes.push_back("ForStmt");
+        stmt.iterable->accept(*this);
+        stmt.body->accept(*this);
+    }
+    
     void visitFunctionDeclStmt(FunctionDeclStmt& stmt) override {
         visitedNodes.push_back("FunctionDeclStmt(" + stmt.name + ")");
         stmt.body->accept(*this);
@@ -109,6 +122,41 @@ public:
         visitedNodes.push_back("ReturnStmt");
         if (stmt.value) {
             stmt.value->accept(*this);
+        }
+    }
+    
+    void visitMemberAccessExpr(MemberAccessExpr& expr) override {
+        visitedNodes.push_back("MemberAccessExpr(" + expr.member + ")");
+        expr.object->accept(*this);
+    }
+    
+    void visitIndexAccessExpr(IndexAccessExpr& expr) override {
+        visitedNodes.push_back("IndexAccessExpr");
+        expr.object->accept(*this);
+        expr.index->accept(*this);
+    }
+    
+    void visitDictExpr(DictExpr& expr) override {
+        visitedNodes.push_back("DictExpr");
+        for (auto& key : expr.keys) {
+            key->accept(*this);
+        }
+        for (auto& value : expr.values) {
+            value->accept(*this);
+        }
+    }
+    
+    void visitTupleExpr(TupleExpr& expr) override {
+        visitedNodes.push_back("TupleExpr");
+        for (auto& elem : expr.elements) {
+            elem->accept(*this);
+        }
+    }
+    
+    void visitSetExpr(SetExpr& expr) override {
+        visitedNodes.push_back("SetExpr");
+        for (auto& elem : expr.elements) {
+            elem->accept(*this);
         }
     }
 };

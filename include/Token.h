@@ -40,6 +40,8 @@ enum class TokenType : uint16_t {
     KW_OR,
     KW_NOT,
     KW_IN,
+    KW_TUPLE,
+    KW_SET,
     
     // Operators
     OP_PLUS,        // +

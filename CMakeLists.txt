@@ -2,186 +2,97 @@
 cmake_minimum_required(VERSION 3.15)
 project(RGLite VERSION 1.0.0 LANGUAGES CXX)
 
-# Set C++ standard
+include(GNUInstallDirs)
+
+# Global settings
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Compiler options
+# Options
+option(RGLITE_BUILD_TESTS "Build unit/perf tests" ON)
+option(RGLITE_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
+
+# Centralized warnings target (modern target-based approach)
+add_library(rglite_warnings INTERFACE)
 if(MSVC)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4 /WX")
+    target_compile_options(rglite_warnings INTERFACE /W4 $<$<BOOL:${RGLITE_WARNINGS_AS_ERRORS}>:/WX> /utf-8)
 else()
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror -Wpedantic")
+    target_compile_options(rglite_warnings INTERFACE -Wall -Wextra -Wpedantic $<$<BOOL:${RGLITE_WARNINGS_AS_ERRORS}>:-Werror>)
 endif()
 
-# Project configuration
+# Paths
 set(RGLITE_SOURCE_DIR ${CMAKE_SOURCE_DIR}/src)
 set(RGLITE_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include)
 
-# Include directories
-include_directories(
-    ${RGLITE_INCLUDE_DIR}
-    ${RGLITE_SOURCE_DIR}
-)
-
-# Main executable with all source files# Add executable
-add_executable(rg
-    src/main.cpp
-    src/RGLite.cpp
-    src/common/utils/StringUtils.cpp
-    src/frontend/lexer/Lexer.cpp
-    src/common/errors/ErrorHandler.cpp
-    src/frontend/parser/Parser.cpp
-    src/frontend/ast/AST.cpp
-    src/common/Token.cpp
-    src/backend/bytecode/Bytecode.cpp
-    src/backend/codegen/CodeGenerator.cpp
-)
-
-# Add Lexer test executable
-add_executable(test_lexer
-    tests/test_lexer.cpp
-    src/RGLite.cpp
-    src/common/utils/StringUtils.cpp
-    src/frontend/lexer/Lexer.cpp
-    src/common/errors/ErrorHandler.cpp
-    src/common/Token.cpp
-)
-
-# Add AST test executable
-add_executable(test_ast
-    tests/test_ast.cpp
-    src/RGLite.cpp
-    src/common/utils/StringUtils.cpp
-    src/frontend/lexer/Lexer.cpp
-    src/frontend/parser/Parser.cpp
-    src/frontend/ast/AST.cpp
-    src/common/errors/ErrorHandler.cpp
-    src/common/Token.cpp
-    src/backend/bytecode/Bytecode.cpp
-    src/backend/codegen/CodeGenerator.cpp
-)
-
-# Add Parser test executable
-add_executable(test_parser
-    tests/test_parser.cpp
-    src/RGLite.cpp
-    src/common/utils/StringUtils.cpp
-    src/frontend/lexer/Lexer.cpp
-    src/frontend/parser/Parser.cpp
-    src/frontend/ast/AST.cpp
-    src/common/errors/ErrorHandler.cpp
-    src/common/Token.cpp
-    src/backend/bytecode/Bytecode.cpp
-    src/backend/codegen/CodeGenerator.cpp
-)
-
-# Add Semantic Analyzer test executable
-add_executable(test_semantic_analyzer
-    tests/test_semantic_analyzer.cpp
-    src/RGLite.cpp
-    src/common/utils/StringUtils.cpp
-    src/frontend/lexer/Lexer.cpp
-    src/common/errors/ErrorHandler.cpp
-    src/common/Token.cpp
-    src/backend/bytecode/Bytecode.cpp
-    src/backend/codegen/CodeGenerator.cpp
-)
-
-# Add Bytecode test executable
-add_executable(test_bytecode
-    tests/test_bytecode.cpp
-    src/RGLite.cpp
-    src/common/utils/StringUtils.cpp
-    src/frontend/lexer/Lexer.cpp
-    src/common/errors/ErrorHandler.cpp
-    src/common/Token.cpp
-    src/frontend/parser/Parser.cpp
-    src/frontend/ast/AST.cpp
-    src/frontend/semantic/SemanticAnalyzer.cpp
-    src/backend/bytecode/Bytecode.cpp
-    src/backend/codegen/CodeGenerator.cpp
-)
-
-# Add Indentation test executable
-add_executable(test_indent
-    tests/test_indent.cpp
-    src/RGLite.cpp
-    src/common/utils/StringUtils.cpp
-    src/frontend/lexer/Lexer.cpp
-    src/common/errors/ErrorHandler.cpp
-    src/common/Token.cpp
-)
-
-# Add Nested Function Indent debug executable
-add_executable(debug_nested_indent
-    tests/debug_nested_indent.cpp
-    src/RGLite.cpp
-    src/common/utils/StringUtils.cpp
-    src/frontend/lexer/Lexer.cpp
-    src/common/errors/ErrorHandler.cpp
-    src/common/Token.cpp
-)
-
-add_executable(test_framework_debug
-    tests/test_framework_debug.cpp
-)
-
-add_executable(test_complex_fixture
-    tests/test_complex_fixture.cpp
-)
-
-# Testing configuration
-if(BUILD_TESTING)
+# Modules
+add_subdirectory(src)
+if(RGLITE_BUILD_TESTS)
     enable_testing()
-
-    # Add tests
     add_subdirectory(tests)
-    
-    # Find GoogleTest
-    find_package(GTest REQUIRED)
-    
-    # Test executable
-    add_executable(rglite_tests
-        tests/test_lexer.cpp
-        tests/test_parser.cpp
-        tests/test_vm.cpp
-    )
-    
-    target_link_libraries(rglite_tests
-        rglite_frontend
-        rglite_backend
-        rglite_runtime
-        rglite_common
-    )
-    
-    add_test(NAME LexerTests COMMAND rglite_tests --gtest_filter="Lexer*")
-    add_test(NAME ParserTests COMMAND rglite_tests --gtest_filter="Parser*")
-    add_test(NAME VMTests COMMAND rglite_tests --gtest_filter="VM*")
 endif()
 
+# Main executable
+add_executable(rg
+    src/main.cpp
+)
+
+# Link with RGLite library
+target_link_libraries(rg PRIVATE rglite rglite_warnings)
+
+# Set target properties
+set_target_properties(rg PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+)
+
+# Add tests
+# Note: tests are already added above
+
 # Installation
-install(TARGETS rg DESTINATION bin)
-install(DIRECTORY ${RGLITE_INCLUDE_DIR}/ DESTINATION include)
+install(TARGETS rg RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS rglite
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+install(DIRECTORY ${RGLITE_INCLUDE_DIR}/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 # Package configuration
 include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
     ${CMAKE_CURRENT_BINARY_DIR}/RGLiteConfigVersion.cmake
-    VERSION ${RGLite_VERSION}
-    COMPATIBILITY AnyNewerVersion
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
 )
 
 # Export targets
-install(TARGETS rg EXPORT RGLiteTargets DESTINATION lib)
-install(EXPORT RGLiteTargets DESTINATION lib/cmake/RGLite)
+install(TARGETS rglite rglite_common rglite_frontend rglite_backend rglite_builtin rglite_memory rglite_bytecode rglite_codegen rglite_vm EXPORT rglite-targets
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
 
-# Documentation
-if(BUILD_DOCS)
-    find_package(Doxygen)
-    if(DOXYGEN_FOUND)
-        set(DOXYGEN_INPUT ${RGLITE_SOURCE_DIR} ${RGLITE_INCLUDE_DIR})
-        set(DOXYGEN_OUTPUT_DIR ${CMAKE_BINARY_DIR}/docs)
-        doxygen_add_docs(docs ${DOXYGEN_INPUT})
-    endif()
-endif()
+# Export interface warnings target (no files, but required by exported targets)
+install(TARGETS rglite_warnings EXPORT rglite-targets)
+
+install(EXPORT rglite-targets
+    FILE RGLiteTargets.cmake
+    NAMESPACE RGLite::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/RGLite
+)
+
+# Create config file
+configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RGLiteConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/RGLiteConfig.cmake"
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/RGLite
+)
+
+# Install config files
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/RGLiteConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/RGLiteConfigVersion.cmake"
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/RGLite
+)

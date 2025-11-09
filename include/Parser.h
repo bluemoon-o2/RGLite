@@ -5,6 +5,7 @@
 #define PARSER_H
 
 #include "AST.h"
+#include "Token.h"
 #include "Lexer.h"
 #include "ErrorHandler.h"
 #include <memory>
@@ -36,6 +37,7 @@ private:
     // Lexer and error handling
     std::unique_ptr<Lexer> lexer_;
     std::shared_ptr<ErrorHandler> errorHandler_;
+    std::string source_;  // Store the source code for error reporting
     
     // Current token and lookahead
     Token currentToken_;
@@ -53,6 +55,7 @@ private:
     
     // Error reporting
     void error(const std::string& message);
+    void error(const Token& token, const std::string& message);
     void errorAt(const Token& token, const std::string& message);
     void synchronize();
     std::string tokenTypeToString(TokenType type);
@@ -63,6 +66,7 @@ private:
     std::unique_ptr<FunctionDeclStmt> parseFunctionDefinition();
     std::unique_ptr<IfStmt> parseIfStatement();
     std::unique_ptr<WhileStmt> parseWhileStatement();
+    std::unique_ptr<ForStmt> parseForStatement();
     std::unique_ptr<ReturnStmt> parseReturnStatement();
     
     std::unique_ptr<Expr> parseExpression();
@@ -77,11 +81,18 @@ private:
     std::unique_ptr<Expr> parsePrimary();
     
     std::unique_ptr<Expr> parseCall();
+    std::unique_ptr<Expr> parseList();
+    std::unique_ptr<Expr> parseDict();
+    std::unique_ptr<Expr> parseTuple();
+    std::unique_ptr<Expr> parseSet();
     
     // Utility functions
     std::unique_ptr<BlockStmt> parseBlock();
     std::vector<std::unique_ptr<Expr>> parseArgumentList();
     std::vector<std::string> parseParameterList();
+    
+    // Helper function to get source line by line number
+    std::string getSourceLine(int line);
 };
 
 } // namespace rglite

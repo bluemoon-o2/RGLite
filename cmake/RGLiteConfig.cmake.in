@@ -1,0 +1,16 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# Check for required dependencies
+# Add any required dependencies here
+
+# Include the targets file
+include("${CMAKE_CURRENT_LIST_DIR}/RGLiteTargets.cmake")
+
+# Set variables for users
+set(RGLite_VERSION @PROJECT_VERSION@)
+set(RGLite_FOUND TRUE)
+
+# Check that all required components are available
+check_required_components(RGLite)

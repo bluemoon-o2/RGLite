@@ -19,11 +19,21 @@ class CodeGenerator;
 class VM;
 
 /**
+ * @brief Compilation options and settings
+ */
+struct CompileOptions {
+    bool optimize = true;           // Enable optimizations
+    bool debug_info = false;        // Include debug information
+    bool strict_mode = false;       // Enable strict type checking
+    int optimization_level = 1;     // Optimization level (0-3)
+};
+
+/**
  * @brief Main compiler class that orchestrates the compilation process
  */
 class Compiler {
 public:
-    Compiler();
+    explicit Compiler(const CompileOptions& options = {});
     ~Compiler();
     
     /**
@@ -36,9 +46,10 @@ public:
     /**
      * @brief Execute RGLite source code directly
      * @param source The source code to execute
+     * @param filename The filename for error reporting (optional)
      * @return Execution result
      */
-    int execute(const std::string& source);
+    int execute(const std::string& source, const std::string& filename = "<stdin>");
     
     /**
      * @brief Execute precompiled bytecode
@@ -48,22 +59,11 @@ public:
     int executeBytecode(const std::vector<uint8_t>& bytecode);
     
 private:
-    // TODO: Implement compiler components
-    // std::unique_ptr<Lexer> lexer_;
-    // std::unique_ptr<Parser> parser_;
-    // std::unique_ptr<SemanticAnalyzer> semantic_analyzer_;
-    // std::unique_ptr<CodeGenerator> code_generator_;
-    // std::unique_ptr<VM> vm_;
-};
-
-/**
- * @brief Compilation options and settings
- */
-struct CompileOptions {
-    bool optimize = true;           // Enable optimizations
-    bool debug_info = true;         // Include debug information
-    bool strict_mode = false;       // Enable strict type checking
-    int optimization_level = 1;     // Optimization level (0-3)
+    // Helper function to get source line by line number
+    std::string getSourceLine(const std::string& source, int line);
+    
+    // Compilation options applied to this compiler instance
+    CompileOptions options_;
 };
 
 /**

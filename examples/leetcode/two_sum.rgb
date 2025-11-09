@@ -1,0 +1,22 @@
+# LeetCode 1: Two Sum
+
+def two_sum(nums, target):
+    n = len(nums)
+    i = 0
+    while i < n:
+        j = i + 1
+        while j < n:
+            if nums[i] + nums[j] == target:
+                return [i, j]
+            j = j + 1
+        i += 1
+    return []
+
+nums = [2, 7, 11, 15]
+target = 9
+ans = two_sum(nums, target)
+print(ans)  # 期望输出：[0, 1]
+
+# nums = [3, 2, 4]
+# target = 6
+# print(two_sum(nums, target))  # 期望输出：[1, 2]

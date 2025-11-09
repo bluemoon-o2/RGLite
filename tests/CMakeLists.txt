@@ -1,95 +1,35 @@
-# CMakeLists.txt for tests directory
+# Tests CMakeLists.txt for RGLite
 
-# Add test executables
-add_executable(test_lexer
-    test_lexer.cpp
-    ../src/common/Token.cpp
-    ../src/frontend/lexer/Lexer.cpp
-    ../src/common/utils/StringUtils.cpp
-    ../src/common/errors/ErrorHandler.cpp
-)
+# Common include: expose test framework to subdirs
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
-target_include_directories(test_lexer PRIVATE
-    ../include
-    ../src/frontend/lexer
-    ../src/common
-)
+# Helper to create a labeled test target
+function(_create_labeled_test test_name label)
+    add_executable(${test_name} ${test_name}.cpp)
+    target_link_libraries(${test_name} PRIVATE rglite)
+    target_include_directories(${test_name} PRIVATE
+        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/tests>
+        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>
+    )
+    set_target_properties(${test_name} PROPERTIES
+        CXX_STANDARD 20
+        CXX_STANDARD_REQUIRED ON
+        CXX_EXTENSIONS OFF
+    )
+    add_test(NAME ${test_name} COMMAND ${test_name})
+    set_tests_properties(${test_name} PROPERTIES LABELS ${label})
+endfunction()
 
-target_link_libraries(test_lexer PRIVATE
-    # Add any required libraries
-)
+# Public functions for subdirectories
+function(create_unit_test test_name)
+    _create_labeled_test(${test_name} unit)
+endfunction()
 
-# Register test
-add_test(NAME LexerTest COMMAND test_lexer)
+function(create_perf_test test_name)
+    _create_labeled_test(${test_name} perf)
+endfunction()
 
-add_executable(test_parser
-    test_parser.cpp
-    ../src/common/Token.cpp
-    ../src/frontend/lexer/Lexer.cpp
-    ../src/frontend/parser/Parser.cpp
-    ../src/frontend/ast/AST.cpp
-    ../src/common/utils/StringUtils.cpp
-    ../src/common/errors/ErrorHandler.cpp
-)
-
-target_include_directories(test_parser PRIVATE
-    ../include
-    ../src/frontend/lexer
-    ../src/frontend/parser
-    ../src/frontend/ast
-    ../src/common
-)
-
-target_link_libraries(test_parser PRIVATE
-    # Add any required libraries
-)
-
-# Register test
-add_test(NAME ParserTest COMMAND test_parser)
-
-add_executable(test_semantic_analyzer
-    test_semantic_analyzer.cpp
-    ../src/common/Token.cpp
-    ../src/frontend/lexer/Lexer.cpp
-    ../src/frontend/parser/Parser.cpp
-    ../src/frontend/ast/AST.cpp
-    ../src/frontend/semantic/SemanticAnalyzer.cpp
-    ../src/common/utils/StringUtils.cpp
-    ../src/common/errors/ErrorHandler.cpp
-)
-
-target_include_directories(test_semantic_analyzer PRIVATE
-    ../include
-    ../src/frontend/lexer
-    ../src/frontend/parser
-    ../src/frontend/ast
-    ../src/frontend/semantic
-    ../src/common
-)
-
-target_link_libraries(test_semantic_analyzer PRIVATE
-    # Add any required libraries
-)
-
-# Register test
-add_test(NAME SemanticAnalyzerTest COMMAND test_semantic_analyzer)
-
-add_executable(test_ast
-    test_ast.cpp
-    ../src/frontend/ast/AST.cpp
-    ../src/common/utils/StringUtils.cpp
-    ../src/common/errors/ErrorHandler.cpp
-)
-
-target_include_directories(test_ast PRIVATE
-    ../include
-    ../src/frontend/ast
-    ../src/common
-)
-
-target_link_libraries(test_ast PRIVATE
-    # Add any required libraries
-)
-
-# Register test
-add_test(NAME ASTTest COMMAND test_ast)
+# Subdirectories for categorized tests
+add_subdirectory(unit)
+add_subdirectory(perf)

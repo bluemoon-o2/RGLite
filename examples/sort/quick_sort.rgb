@@ -1,0 +1,38 @@
+def concat(a, b):
+    result = []
+    i = 0
+    while i < len(a):
+        result.append(a[i])
+        i = i + 1
+    j = 0
+    while j < len(b):
+        result.append(b[j])
+        j = j + 1
+    return result
+
+def quick_sort(arr):
+    n = len(arr)
+    if n <= 1:
+        return arr
+    pivot = arr[int(n / 2)]
+    less = []
+    equal = []
+    greater = []
+    i = 0
+    while i < n:
+        if arr[i] < pivot:
+            less.append(arr[i])
+        else:
+            if arr[i] > pivot:
+                greater.append(arr[i])
+            else:
+                equal.append(arr[i])
+        i = i + 1
+    sorted_less = quick_sort(less)
+    sorted_greater = quick_sort(greater)
+    left = concat(sorted_less, equal)
+    return concat(left, sorted_greater)
+
+data = [5, 2, 8, 1, 3, 7, 4, 6]
+sorted_data = quick_sort(data)
+print(sorted_data)

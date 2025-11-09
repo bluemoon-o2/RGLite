@@ -29,10 +29,21 @@ struct Diagnostic {
     std::string message;
     SourceLocation location;
     std::string code;  // Error code (e.g., "R001")
+    std::string sourceLine;  // Source code line where error occurred
+    int column;  // Column where error occurred
+    int end_column;  // End column for multi-line errors
+    int end_line;  // End line for multi-line errors
+    std::string filename;  // Filename for error reporting
+    std::string function_name;  // Function name for context (Python-style)
+    bool displayTracebackHeader = false; // Whether to display the "Traceback (most recent call last):" header (Python-style)
     
     Diagnostic(Severity s, const std::string& msg, const SourceLocation& loc, 
-               const std::string& c = "")
-        : severity(s), message(msg), location(loc), code(c) {}
+               const std::string& c = "", const std::string& srcLine = "", 
+               int col = 0, int endCol = 0, int endLine = 0, 
+               const std::string& fname = "<stdin>", const std::string& funcName = "",
+               bool displayTraceback = false)
+        : severity(s), message(msg), location(loc), code(c), sourceLine(srcLine), 
+          column(col), end_column(endCol), end_line(endLine), filename(fname), function_name(funcName), displayTracebackHeader(displayTraceback) {}
     
     std::string toString() const;
 };
@@ -138,6 +149,18 @@ public:
     static Diagnostic missingParen(const std::string& type, const SourceLocation& loc);
     static Diagnostic missingColon(const SourceLocation& loc);
     static Diagnostic invalidIndentation(const SourceLocation& loc);
+    
+    // Multi-line error support
+    static Diagnostic multiLineError(const Token& startToken, const Token& endToken, 
+                                     const std::string& message, const std::string& code = "");
+    static Diagnostic syntaxError(const SourceLocation& loc, const std::string& message, 
+                                 const std::string& sourceLine = "", int column = 0, 
+                                 int endColumn = 0, int endLine = 0);
+    
+    // Additional methods for Python-style error messages
+    static Diagnostic parenthesisNotClosed(const Token& token, const std::string& filename = "<stdin>");
+    static Diagnostic bracketNotClosed(const Token& token, const std::string& filename = "<stdin>");
+    static Diagnostic braceNotClosed(const Token& token, const std::string& filename = "<stdin>");
 };
 
 } // namespace rglite

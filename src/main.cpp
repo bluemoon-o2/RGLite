@@ -1,4 +1,4 @@
-﻿// RGLite Language Compiler - Main Entry Point
+// RGLite Language Compiler - Main Entry Point
 // This file contains the main function and command-line interface
 
 #include <iostream>
@@ -8,6 +8,11 @@
 #include <filesystem>
 #include "RGLite.h"
 #include "ErrorHandler.h"
+
+#ifdef _MSC_VER
+// Disable UTF-8/Unicode codepage warning treated as error on some setups
+#pragma warning(disable:4819)
+#endif
 
 using namespace rglite;
 
@@ -144,10 +149,8 @@ void startRepl() {
         }
         
         try {
-            int result = compiler->execute(line);
-            if (result != 0) {
-                std::cout << result << std::endl;
-            }
+            compiler->execute(line);
+
         } catch (const std::exception& e) {
             std::cout << "Error: " << e.what() << std::endl;
         }
@@ -268,8 +271,18 @@ int main(int argc, char* argv[]) {
             return 0;
         }
 
+        // normalize input file to absolute path for Python-like error reporting
+        std::string fullInput = args.inputFile;
+        try {
+            if (!args.inputFile.empty()) {
+                fullInput = std::filesystem::absolute(args.inputFile).lexically_normal().string();
+            }
+        } catch (...) {
+            // fall back to original input if normalization fails
+        }
+
         // read source file
-        std::string source = readFile(args.inputFile);
+        std::string source = readFile(fullInput);
 
         // configure compiler options
         CompileOptions options;
@@ -280,7 +293,7 @@ int main(int argc, char* argv[]) {
         // compile mode: generate bytecode
         if (args.compileMode) {
             std::string outputFile = args.outputFile.empty() 
-                ? getDefaultOutput(args.inputFile) 
+                ? getDefaultOutput(fullInput) 
                 : args.outputFile;
 
             auto bytecode = compiler->compile(source);
@@ -289,8 +302,7 @@ int main(int argc, char* argv[]) {
         } 
         // execute mode: directly run
         else {
-            int result = compiler->execute(source);
-            return result;
+            return compiler->execute(source, fullInput);
         }
 
     } catch (const std::exception& e) {

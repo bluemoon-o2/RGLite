@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <cctype>
 #include <iostream>
+#include <sstream>
 
 namespace rglite {
 
@@ -31,14 +32,18 @@ static const std::unordered_map<std::string, TokenType> KEYWORDS = {
     // Logical operators
     {"and", TokenType::KW_AND},
     {"or", TokenType::KW_OR},
-    {"not", TokenType::KW_NOT}
+    {"not", TokenType::KW_NOT},
+    
+    // Data types
+    {"tuple", TokenType::KW_TUPLE},
+    {"set", TokenType::KW_SET}
 };
 
 Lexer::Lexer(const std::string& source, const std::string& filename,
              std::shared_ptr<ErrorHandler> errorHandler)
     : source_(source), filename_(filename), errorHandler_(errorHandler),
       position_(0), line_(1), column_(1), start_(0),
-      peekedToken_(), hasPeeked_(false), atLineStart_(true), pendingDedents_(false), currentIndent_(0), targetIndentLevel_(0) {
+      peekedToken_(), hasPeeked_(false), atLineStart_(true), pendingDedents_(false), currentIndent_(0), targetIndentLevel_(0), pending_dedent_count_(0) {
     
     if (!errorHandler_) {
         errorHandler_ = std::make_shared<StandardErrorHandler>();
@@ -54,9 +59,9 @@ Token Lexer::nextToken() {
         return peekedToken_;
     }
     
-    // Handle pending dedents first
-    if (pendingDedents_) {
-        return handleDedents();
+    if (pending_dedent_count_ > 0) {
+        --pending_dedent_count_;
+        return makeToken(TokenType::DEDENT);
     }
     
     // Handle line start and indentation
@@ -71,9 +76,14 @@ Token Lexer::nextToken() {
         if (c == '\n') {
             // Handle newline
             start_ = position_;
+            // Store the current line before advancing
+            size_t currentLine = line_;
             advance(); // Consume the newline
             atLineStart_ = true;
-            return makeToken(TokenType::NEWLINE);
+            // Use the stored line number for the NEWLINE token
+            uint32_t column = (column_ > 0) ? static_cast<uint32_t>(column_ - 1) : 0;
+            SourceLocation loc(static_cast<uint32_t>(currentLine), column);
+            return Token{TokenType::NEWLINE, "", loc};
         } else if (StringUtils::isWhitespace(c) && c != '\n') {
             // Skip other whitespace
             advance();
@@ -87,12 +97,19 @@ Token Lexer::nextToken() {
     }
     
     if (isAtEnd()) {
-        // Handle end of file - generate any pending dedents
+        // Handle end of file - generate any pending dedents to level 0
         if (!indentStack_.empty() && indentStack_.back() > 0) {
-            pendingDedents_ = true;
-            // Set target indentation level to 0 for EOF
-            targetIndentLevel_ = 0;
-            return handleDedents();
+            // Dedent to 0
+            auto it = std::find(indentStack_.begin(), indentStack_.end(), 0);
+            if (it != indentStack_.end()) {
+                size_t pos = std::distance(indentStack_.begin(), it);
+                size_t pops = indentStack_.size() - (pos + 1);
+                if (pops > 0) {
+                    pending_dedent_count_ = static_cast<int>(pops) - 1;
+                    indentStack_.resize(pos + 1);
+                    return makeToken(TokenType::DEDENT);
+                }
+            }
         }
         
         // Create EOF token with empty lexeme
@@ -165,6 +182,20 @@ SourceLocation Lexer::getCurrentLocation() const {
     return SourceLocation{static_cast<uint32_t>(line_), static_cast<uint32_t>(column_)};
 }
 
+const std::string& Lexer::getSource() const {
+    return source_;
+}
+
+const std::string& Lexer::getFilename() const {
+    return filename_;
+}
+
+void Lexer::setErrorHandler(std::shared_ptr<ErrorHandler> handler) {
+    if (handler) {
+        errorHandler_ = handler;
+    }
+}
+
 char Lexer::advance() {
     if (isAtEnd()) {
         return '\0';
@@ -218,6 +249,10 @@ void Lexer::skipLineComment() {
     while (!isAtEnd() && peek() != '\n') {
         advance();
     }
+    // Consume the newline character if present
+    if (!isAtEnd() && peek() == '\n') {
+        advance();
+    }
 }
 
 void Lexer::skipBlockComment() {
@@ -240,12 +275,28 @@ void Lexer::skipBlockComment() {
 
 Token Lexer::makeToken(TokenType type) {
     std::string lexeme = source_.substr(start_, position_ - start_);
-    SourceLocation loc = {static_cast<uint32_t>(line_), static_cast<uint32_t>(column_ - lexeme.length())};
+    // Fix column calculation: use start position instead of current position minus length
+    // The token starts at column_ - (position_ - start_) + 1
+    size_t tokenLength = position_ - start_;
+    size_t tokenStartColumn = (tokenLength > 0) ? (column_ - tokenLength + 1) : column_;
+    // FIX: Use current line_ for all tokens to maintain consistency
+    SourceLocation loc = {static_cast<uint32_t>(line_), static_cast<uint32_t>(tokenStartColumn)};
     return Token{type, lexeme, loc};
 }
 
 Token Lexer::makeToken(TokenType type, const std::string& literal) {
-    SourceLocation loc = {static_cast<uint32_t>(line_), static_cast<uint32_t>(column_ - literal.length())};
+    // Use consumed length for column calculation; literal length may differ
+    // for strings (quotes removed) and multi-line literals.
+    size_t consumedLength = (position_ >= start_) ? (position_ - start_) : 0;
+    size_t tokenStartColumn = (consumedLength > 0) ? (column_ - consumedLength + 1) : column_;
+    SourceLocation loc = {static_cast<uint32_t>(line_), static_cast<uint32_t>(tokenStartColumn)};
+
+    // For string literals, store actual string content (without quotes) in lexeme
+    if (type == TokenType::STRING) {
+        return Token{type, literal, loc};
+    }
+
+    // For other token types, use the literal as lexeme
     return Token{type, literal, loc};
 }
 
@@ -323,9 +374,15 @@ Token Lexer::scanNumber() {
     
     if (isFloat) {
         Token token = makeToken(TokenType::FLOAT, numberLiteral);
+        token.float_value = std::stod(numberLiteral);
         return token;
     } else {
         Token token = makeToken(TokenType::INTEGER, numberLiteral);
+        if (isHex) {
+            token.int_value = std::stoll(numberLiteral, nullptr, 16);
+        } else {
+            token.int_value = std::stoll(numberLiteral);
+        }
         return token;
     }
 }
@@ -334,12 +391,32 @@ Token Lexer::scanString() {
     char quote = source_[start_]; // " or '
     std::string value;
     
+    // Detect triple-quoted string: """...""" or '''...'''
+    bool isTriple = false;
+    if (peek() == quote && peek(1) == quote) {
+        // We have already consumed the first quote in nextToken(); if the next two
+        // characters match the same quote, treat as triple-quoted string.
+        isTriple = true;
+        advance(); // consume second quote
+        advance(); // consume third quote
+    }
+    
     while (!isAtEnd()) {
         char c = advance();
         
-        if (c == quote) {
-            // End of string
-            return makeToken(TokenType::STRING, value);
+        if (isTriple) {
+            // End of triple-quoted string if three consecutive quotes
+            if (c == quote && peek() == quote && peek(1) == quote) {
+                advance(); // consume second quote
+                advance(); // consume third quote
+                atLineStart_ = false;
+                return makeToken(TokenType::STRING, value);
+            }
+        } else {
+            if (c == quote) {
+                atLineStart_ = false;
+                return makeToken(TokenType::STRING, value);
+            }
         }
         
         if (c == '\\') {
@@ -366,6 +443,7 @@ Token Lexer::scanString() {
     
     // Unterminated string
     error("Unterminated string literal");
+    atLineStart_ = false;
     return makeToken(TokenType::STRING, value);
 }
 
@@ -485,7 +563,31 @@ void Lexer::error(const std::string& message) {
 
 void Lexer::error(const std::string& message, const SourceLocation& location) {
     if (errorHandler_) {
-        errorHandler_->report(Diagnostic(Severity::ERROR, message, location));
+        // Extract source line for better caret alignment and Python-style display
+        std::string sourceLine;
+        {
+            std::istringstream iss(source_);
+            std::string currentLine;
+            int currentLineNum = 1;
+            while (std::getline(iss, currentLine)) {
+                if (currentLineNum == static_cast<int>(location.line)) {
+                    sourceLine = currentLine;
+                    break;
+                }
+                currentLineNum++;
+            }
+        }
+        errorHandler_->report(Diagnostic(
+            Severity::ERROR,
+            message,
+            location,
+            std::string(ErrorCode::UNEXPECTED_TOKEN),
+            sourceLine,
+            static_cast<int>(location.column),
+            0,
+            0,
+            filename_
+        ));
     }
 }
 
@@ -510,16 +612,16 @@ Token Lexer::handleLineStart() {
             hasTabs = true;
             advance();
         } else if (c == '\n') {
-            // Empty line, skip it and continue with next line
+            // Empty line (only whitespace before newline): skip newline without emitting a token
             advance();
-            line_++;
-            column_ = 1;
-            // Continue processing the next line's indentation
+            // Reset indentation tracking for the next line
             indentLevel = 0;
             hasSpaces = false;
             hasTabs = false;
-            // Update start position for the next line
+            // Update start position for the next line and continue processing
             start_ = position_;
+            // Do not return a NEWLINE token here; treat empty lines as no-op
+            continue;
         } else {
             break;
         }
@@ -533,15 +635,17 @@ Token Lexer::handleLineStart() {
     
     // Check if this is a comment line
     if (peek() == '#') {
-        // Skip the comment line
+        // Skip the comment (including its trailing newline)
         skipLineComment();
+        // We are now at the start of the next line; keep line-start mode
         atLineStart_ = true;
-        return nextToken();
+        // Process the next line's indentation and tokens
+        return handleLineStart();
     }
     
     // Check for mixed indentation (spaces and tabs in the same line)
     if (hasSpaces && hasTabs) {
-        error("Mixed indentation: tabs and spaces cannot be mixed");
+        error("TabError: inconsistent use of tabs and spaces in indentation");
         // Continue processing despite the error
     }
     
@@ -550,29 +654,32 @@ Token Lexer::handleLineStart() {
     // Compare with current indent level
     int currentLevel = indentStack_.back();
     
-    if (indentLevel > currentLevel) {
+    if (indentLevel == currentLevel) {
+        // Same level, continue with normal token
+        return nextToken();
+    } else if (indentLevel > currentLevel) {
         // Increase indentation
         indentStack_.push_back(indentLevel);
-        currentIndent_ = indentLevel;
         return makeToken(TokenType::INDENT);
-    } else if (indentLevel < currentLevel) {
-        // Decrease indentation - generate only one DEDENT at a time
-        pendingDedents_ = true;
-        // Set target to one level less than current (not the final target)
-        targetIndentLevel_ = currentLevel - 1;
-        // Pop one level from the stack
-        indentStack_.pop_back();
-        currentIndent_ = indentStack_.back();
-        // Check if we need more DEDENTs
-        if (indentStack_.back() > indentLevel) {
-            pendingDedents_ = true;
-        } else {
-            pendingDedents_ = false;
-        }
-        return makeToken(TokenType::DEDENT);
     } else {
-        // Same indentation level, continue with normal token
-        return nextToken();
+        // Decrease indentation
+        auto it = std::find(indentStack_.begin(), indentStack_.end(), indentLevel);
+        if (it == indentStack_.end()) {
+            error("IndentationError: unindent does not match any outer indentation level");
+            // Recover by continuing with current tokens
+            return nextToken();
+        } else {
+            size_t pos = std::distance(indentStack_.begin(), it);
+            size_t pops = indentStack_.size() - (pos + 1);
+            if (pops > 0) {
+                pending_dedent_count_ = static_cast<int>(pops) - 1;
+                indentStack_.resize(pos + 1);
+                return makeToken(TokenType::DEDENT);
+            } else {
+                // No dedent needed
+                return nextToken();
+            }
+        }
     }
 }
 
@@ -606,3 +713,5 @@ Token Lexer::handleDedents() {
 }
 
 } // namespace rglite
+
+

@@ -63,6 +63,24 @@ std::string UnaryExpr::toString() const {
     return "UnaryExpr(" + op + " " + operand->toString() + ")";
 }
 
+// ListExpr implementation
+void ListExpr::accept(ASTVisitor& visitor) {
+    visitor.visitListExpr(*this);
+}
+
+std::string ListExpr::toString() const {
+    std::stringstream ss;
+    ss << "ListExpr([";
+    
+    for (size_t i = 0; i < elements.size(); ++i) {
+        if (i > 0) ss << ", ";
+        ss << elements[i]->toString();
+    }
+    
+    ss << "])";
+    return ss.str();
+}
+
 // ExprStmt implementation
 void ExprStmt::accept(ASTVisitor& visitor) {
     visitor.visitExprStmt(*this);
@@ -118,6 +136,17 @@ std::string WhileStmt::toString() const {
            ", body: " + body->toString() + ")";
 }
 
+// ForStmt implementation
+void ForStmt::accept(ASTVisitor& visitor) {
+    visitor.visitForStmt(*this);
+}
+
+std::string ForStmt::toString() const {
+    return "ForStmt(variable: " + variable + 
+           ", iterable: " + iterable->toString() + 
+           ", body: " + body->toString() + ")";
+}
+
 // FunctionDeclStmt implementation
 void FunctionDeclStmt::accept(ASTVisitor& visitor) {
     visitor.visitFunctionDeclStmt(*this);
@@ -146,6 +175,78 @@ std::string ReturnStmt::toString() const {
         return "ReturnStmt(" + value->toString() + ")";
     }
     return "ReturnStmt()";
+}
+
+// MemberAccessExpr implementation
+void MemberAccessExpr::accept(ASTVisitor& visitor) {
+    visitor.visitMemberAccessExpr(*this);
+}
+
+std::string MemberAccessExpr::toString() const {
+    return "MemberAccessExpr(" + object->toString() + "." + member + ")";
+}
+
+// IndexAccessExpr implementation
+void IndexAccessExpr::accept(ASTVisitor& visitor) {
+    visitor.visitIndexAccessExpr(*this);
+}
+
+std::string IndexAccessExpr::toString() const {
+    return "IndexAccessExpr(" + object->toString() + "[" + index->toString() + "])";
+}
+
+// DictExpr implementation
+void DictExpr::accept(ASTVisitor& visitor) {
+    visitor.visitDictExpr(*this);
+}
+
+std::string DictExpr::toString() const {
+    std::stringstream ss;
+    ss << "DictExpr({";
+    
+    for (size_t i = 0; i < keys.size(); ++i) {
+        if (i > 0) ss << ", ";
+        ss << keys[i]->toString() << ": " << values[i]->toString();
+    }
+    
+    ss << "})";
+    return ss.str();
+}
+
+// TupleExpr implementation
+void TupleExpr::accept(ASTVisitor& visitor) {
+    visitor.visitTupleExpr(*this);
+}
+
+std::string TupleExpr::toString() const {
+    std::stringstream ss;
+    ss << "TupleExpr(";
+    
+    for (size_t i = 0; i < elements.size(); ++i) {
+        if (i > 0) ss << ", ";
+        ss << elements[i]->toString();
+    }
+    
+    ss << ")";
+    return ss.str();
+}
+
+// SetExpr implementation
+void SetExpr::accept(ASTVisitor& visitor) {
+    visitor.visitSetExpr(*this);
+}
+
+std::string SetExpr::toString() const {
+    std::stringstream ss;
+    ss << "SetExpr({";
+    
+    for (size_t i = 0; i < elements.size(); ++i) {
+        if (i > 0) ss << ", ";
+        ss << elements[i]->toString();
+    }
+    
+    ss << "})";
+    return ss.str();
 }
 
 } // namespace rglite

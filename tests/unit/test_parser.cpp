@@ -165,5 +165,59 @@ TEST_F(ParserSuite, LogicalNot, ParserTestFixture) {
     EXPECT_FALSE(parser->hasErrors());
 }
 
+// Test suite for 'in' and 'not in' operators
+TEST_F(ParserSuite, InOperator, ParserTestFixture) {
+    parseAndValidate("x in [1, 2, 3]\n", 
+        "ExprStmt(BinaryExpr(IdentifierExpr(x) in ListExpr([LiteralExpr(1), LiteralExpr(2), LiteralExpr(3)])))");
+    EXPECT_FALSE(parser->hasErrors());
+}
+
+TEST_F(ParserSuite, NotInOperator, ParserTestFixture) {
+    parseAndValidate("x not in [1, 2, 3]\n", 
+        "ExprStmt(UnaryExpr(not BinaryExpr(IdentifierExpr(x) in ListExpr([LiteralExpr(1), LiteralExpr(2), LiteralExpr(3)]))))");
+    EXPECT_FALSE(parser->hasErrors());
+}
+
+TEST_F(ParserSuite, InOperatorWithString, ParserTestFixture) {
+    parseAndValidate("'a' in 'hello'\n", 
+        "ExprStmt(BinaryExpr(LiteralExpr(\"a\") in LiteralExpr(\"hello\")))");
+    EXPECT_FALSE(parser->hasErrors());
+}
+
+TEST_F(ParserSuite, NotInOperatorWithString, ParserTestFixture) {
+    parseAndValidate("'x' not in 'hello'\n", 
+        "ExprStmt(UnaryExpr(not BinaryExpr(LiteralExpr(\"x\") in LiteralExpr(\"hello\"))))");
+    EXPECT_FALSE(parser->hasErrors());
+}
+
+TEST_F(ParserSuite, InOperatorWithDict, ParserTestFixture) {
+    parseAndValidate("'key' in {'key': 'value'}\n", 
+        "ExprStmt(BinaryExpr(LiteralExpr(\"key\") in DictExpr({LiteralExpr(\"key\"): LiteralExpr(\"value\")})))");
+    EXPECT_FALSE(parser->hasErrors());
+}
+
+TEST_F(ParserSuite, InOperatorComplexExpression, ParserTestFixture) {
+    parseAndValidate("x in [1, 2, 3] and y not in [4, 5, 6]\n", 
+        "ExprStmt(BinaryExpr(BinaryExpr(IdentifierExpr(x) in ListExpr([LiteralExpr(1), LiteralExpr(2), LiteralExpr(3)])) and UnaryExpr(not BinaryExpr(IdentifierExpr(y) in ListExpr([LiteralExpr(4), LiteralExpr(5), LiteralExpr(6)])))))");
+    EXPECT_FALSE(parser->hasErrors());
+}
+
+// Test error scenarios for 'in' operator
+TEST_F(ParserSuite, InOperatorErrorMissingRightOperand, ParserTestFixture) {
+    createParser("x in\n");
+    auto stmt = parser->parse();
+    
+    EXPECT_NE(stmt, nullptr);
+    EXPECT_TRUE(parser->hasErrors());
+}
+
+TEST_F(ParserSuite, NotInOperatorErrorMissingRightOperand, ParserTestFixture) {
+    createParser("x not in\n");
+    auto stmt = parser->parse();
+    
+    EXPECT_NE(stmt, nullptr);
+    EXPECT_TRUE(parser->hasErrors());
+}
+
 // Main function using the new test framework
 RUN_ALL_TESTS();

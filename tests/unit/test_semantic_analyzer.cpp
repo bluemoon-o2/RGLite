@@ -35,11 +35,11 @@ protected:
      * @brief Helper function to parse and analyze source code
      */
     bool parseAndAnalyze(const std::string& source) {
-        auto lexer = std::make_unique<Lexer>(source);
+        auto lexer = std::make_unique<Lexer>(source, "test.rgb", errorHandler);
         auto parser = std::make_unique<Parser>(std::move(lexer), errorHandler);
         auto ast = parser->parse();
         
-        if (parser->hasErrors()) {
+        if (errorHandler->hasErrors()) {
             return false;
         }
         

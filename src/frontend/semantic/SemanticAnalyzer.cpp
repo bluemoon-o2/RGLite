@@ -75,27 +75,58 @@ Symbol* SymbolTable::lookup(const std::string& name) const {
 }
 
 void SymbolTable::defineBuiltins() {
-    // Define built-in functions
-    auto printSymbol = std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "print", SourceLocation());
-    define("print", std::move(printSymbol));
-    
-    auto inputSymbol = std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "input", SourceLocation());
-    define("input", std::move(inputSymbol));
-    
-    auto lenSymbol = std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "len", SourceLocation());
-    define("len", std::move(lenSymbol));
-    
-    auto rangeSymbol = std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "range", SourceLocation());
-    define("range", std::move(rangeSymbol));
-    
-    auto intSymbol = std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "int", SourceLocation());
-    define("int", std::move(intSymbol));
-    
-    auto floatSymbol = std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "float", SourceLocation());
-    define("float", std::move(floatSymbol));
-    
-    auto strSymbol = std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "str", SourceLocation());
-    define("str", std::move(strSymbol));
+    // Define built-in functions (synchronized with VM::registerBuiltinFunctions)
+    // I/O and core
+    define("print", std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "print", SourceLocation()));
+    define("len",   std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "len",   SourceLocation()));
+
+    // Type checking
+    define("type",       std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "type",       SourceLocation()));
+    define("isnil",      std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "isnil",      SourceLocation()));
+    define("isboolean",  std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "isboolean",  SourceLocation()));
+    define("isinteger",  std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "isinteger",  SourceLocation()));
+    define("isfloat",    std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "isfloat",    SourceLocation()));
+    define("isnumber",   std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "isnumber",   SourceLocation()));
+    define("isstring",   std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "isstring",   SourceLocation()));
+    define("islist",     std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "islist",     SourceLocation()));
+    define("isdict",     std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "isdict",     SourceLocation()));
+    define("isfunction", std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "isfunction", SourceLocation()));
+
+    // Math
+    define("abs", std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "abs", SourceLocation()));
+    define("min", std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "min", SourceLocation()));
+    define("max", std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "max", SourceLocation()));
+
+    // Conversion and string
+    define("int",    std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "int",    SourceLocation()));
+    define("str",    std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "str",    SourceLocation()));
+    define("substr", std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "substr", SourceLocation()));
+
+    // List functions
+    define("append",    std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "append",    SourceLocation()));
+    define("remove",    std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "remove",    SourceLocation()));
+    define("extend",    std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "extend",    SourceLocation()));
+    define("insert",    std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "insert",    SourceLocation()));
+    define("pop",       std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "pop",       SourceLocation()));
+    define("clear",     std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "clear",     SourceLocation()));
+    define("sort",      std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "sort",      SourceLocation()));
+    define("reverse",   std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "reverse",   SourceLocation()));
+    define("count",     std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "count",     SourceLocation()));
+    define("index",     std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "index",     SourceLocation()));
+    define("list_copy", std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "list_copy", SourceLocation()));
+
+    // Dict functions
+    define("keys",       std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "keys",       SourceLocation()));
+    define("values",     std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "values",     SourceLocation()));
+    define("contains",   std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "contains",   SourceLocation()));
+    define("update",     std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "update",     SourceLocation()));
+    define("get",        std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "get",        SourceLocation()));
+    define("copy",       std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "copy",       SourceLocation()));
+    define("fromkeys",   std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "fromkeys",   SourceLocation()));
+    define("items",      std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "items",      SourceLocation()));
+    define("dict_pop",   std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "dict_pop",   SourceLocation()));
+    define("popitem",    std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "popitem",    SourceLocation()));
+    define("setdefault", std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "setdefault", SourceLocation()));
 }
 
 // TypeChecker implementation
@@ -225,6 +256,28 @@ Type TypeChecker::checkFunctionCall(const std::string& name, const std::vector<T
         return Type::STRING;
     }
     
+    if (name == "has_next") {
+        if (argTypes.size() != 1) {
+            return Type::UNKNOWN;
+        }
+        // has_next can be applied to lists and dicts
+        if (argTypes[0] == Type::LIST || argTypes[0] == Type::DICT) {
+            return Type::BOOLEAN;
+        }
+        return Type::UNKNOWN;
+    }
+    
+    if (name == "next") {
+        if (argTypes.size() != 1) {
+            return Type::UNKNOWN;
+        }
+        // next can be applied to lists and dicts
+        if (argTypes[0] == Type::LIST || argTypes[0] == Type::DICT) {
+            return Type::UNKNOWN; // Return type depends on the collection type
+        }
+        return Type::UNKNOWN;
+    }
+    
     // User-defined functions would be checked here
     return Type::UNKNOWN;
 }
@@ -256,9 +309,52 @@ Type TypeChecker::checkFunctionCall(Symbol* symbol, const std::vector<std::uniqu
             }
             return Type::UNKNOWN;
         }
+        
+        if (symbol->name == "has_next") {
+            // has_next takes one argument of type list or dict
+            if (args.size() == 1) {
+                return Type::BOOLEAN;
+            }
+            return Type::UNKNOWN;
+        }
+        
+        if (symbol->name == "next") {
+            // next takes one argument of type list or dict
+            if (args.size() == 1) {
+                return Type::UNKNOWN; // Return type depends on the collection type
+            }
+            return Type::UNKNOWN;
+        }
     }
     
     // For other functions, return UNKNOWN for now
+    return Type::UNKNOWN;
+}
+
+Type TypeChecker::checkIndexAccess(Type objectType, Type indexType) {
+    // Check if the object is a list or dictionary
+    if (objectType != Type::LIST && objectType != Type::DICT && objectType != Type::UNKNOWN) {
+        return Type::UNKNOWN;
+    }
+    
+    // For lists, index must be an integer
+    if (objectType == Type::LIST) {
+        if (indexType != Type::INTEGER && indexType != Type::UNKNOWN) {
+            return Type::UNKNOWN;
+        }
+        // Return unknown type for list elements (they can be any type)
+        return Type::UNKNOWN;
+    }
+    
+    // For dictionaries, index must be a string or integer
+    if (objectType == Type::DICT) {
+        if (indexType != Type::STRING && indexType != Type::INTEGER && indexType != Type::UNKNOWN) {
+            return Type::UNKNOWN;
+        }
+        // Return unknown type for dictionary values (they can be any type)
+        return Type::UNKNOWN;
+    }
+    
     return Type::UNKNOWN;
 }
 
@@ -270,6 +366,8 @@ std::string TypeChecker::typeToString(Type type) const {
         case Type::BOOLEAN: return "boolean";
         case Type::NONE: return "none";
         case Type::FUNCTION: return "function";
+        case Type::LIST: return "list";
+        case Type::DICT: return "dict";
         case Type::UNKNOWN: return "unknown";
         default: return "unknown";
     }
@@ -282,6 +380,10 @@ bool TypeChecker::isAssignable(Type type) const {
 
 bool TypeChecker::isNumeric(Type type) const {
     return type == Type::INTEGER || type == Type::FLOAT;
+}
+
+bool TypeChecker::isCollection(Type type) const {
+    return type == Type::LIST || type == Type::DICT;
 }
 
 // SemanticAnalyzer implementation
@@ -329,13 +431,23 @@ bool SemanticAnalyzer::hasErrors() const {
 
 void SemanticAnalyzer::error(const std::string& message, const SourceLocation& location) {
     hasErrors_ = true;
-    Diagnostic diagnostic(Severity::ERROR, message, location, ErrorCode::TYPE_MISMATCH);
+    // Fill source line and column for accurate caret
+    std::string sline = getSourceLine(static_cast<int>(location.line));
+    int col = static_cast<int>(location.column);
+    std::string fname = filename_.empty() ? std::string("<stdin>") : filename_;
+    Diagnostic diagnostic(Severity::ERROR, message, location, ErrorCode::TYPE_MISMATCH,
+                         sline, col, 0, 0, fname, getCurrentFunction());
     errorHandler_->report(diagnostic);
 }
 
 void SemanticAnalyzer::error(const SourceLocation& location, const std::string& message) {
     hasErrors_ = true;
-    Diagnostic diagnostic(Severity::ERROR, message, location, ErrorCode::TYPE_MISMATCH);
+    // Fill source line and column for accurate caret
+    std::string sline = getSourceLine(static_cast<int>(location.line));
+    int col = static_cast<int>(location.column);
+    std::string fname = filename_.empty() ? std::string("<stdin>") : filename_;
+    Diagnostic diagnostic(Severity::ERROR, message, location, ErrorCode::TYPE_MISMATCH,
+                         sline, col, 0, 0, fname, getCurrentFunction());
     errorHandler_->report(diagnostic);
 }
 
@@ -360,6 +472,9 @@ void SemanticAnalyzer::analyzeStatement(const std::unique_ptr<Stmt>& stmt) {
             break;
         case StmtType::WHILE_STMT:
             analyzeWhileStmt(dynamic_cast<WhileStmt*>(stmt.get()));
+            break;
+        case StmtType::FOR_STMT:
+            analyzeForStmt(dynamic_cast<ForStmt*>(stmt.get()));
             break;
         case StmtType::RETURN_STMT:
             analyzeReturnStmt(dynamic_cast<ReturnStmt*>(stmt.get()));
@@ -442,6 +557,7 @@ void SemanticAnalyzer::analyzeFunctionDeclStmt(FunctionDeclStmt* stmt) {
     for (const auto& param : stmt->parameters) {
         auto paramSymbol = std::make_unique<Symbol>(Symbol::Kind::PARAMETER, param, stmt->location);
         paramSymbol->isInitialized = true;
+        paramSymbol->type = Type::UNKNOWN;
         
         if (!symbolTable_->define(param, std::move(paramSymbol))) {
             error(stmt->location, "Failed to define parameter '" + param + "'");
@@ -497,9 +613,45 @@ void SemanticAnalyzer::analyzeWhileStmt(WhileStmt* stmt) {
     analyzeStatement(stmt->body);
 }
 
+void SemanticAnalyzer::analyzeForStmt(ForStmt* stmt) {
+    // Analyze iterable expression
+    Type iterableType = analyzeExpression(stmt->iterable);
+    
+    // Iterable must be a list or dictionary
+    if (iterableType != Type::LIST && iterableType != Type::DICT && iterableType != Type::UNKNOWN) {
+        error(stmt->iterable->getLocation(), "For loop iterable must be a list or dictionary");
+    }
+    
+    // Enter a new scope for the loop variable
+    symbolTable_->pushScope();
+    
+    // Declare the loop variable in the current scope
+    // The type of the loop variable depends on the iterable type
+    Type variableType = Type::UNKNOWN;
+    if (iterableType == Type::LIST) {
+        variableType = Type::UNKNOWN; // List elements can be of any type
+    } else if (iterableType == Type::DICT) {
+        variableType = Type::STRING; // Dictionary keys are strings
+    }
+    
+    auto loopVarSymbol = std::make_unique<Symbol>(Symbol::Kind::VARIABLE, stmt->variable, stmt->location);
+    loopVarSymbol->isInitialized = true;
+    
+    if (!symbolTable_->define(stmt->variable, std::move(loopVarSymbol))) {
+        error(stmt->location, "Failed to define loop variable '" + stmt->variable + "'");
+    }
+    
+    // Analyze the loop body
+    analyzeStatement(stmt->body);
+    
+    // Exit the loop variable scope
+    symbolTable_->popScope();
+}
+
 void SemanticAnalyzer::analyzeReturnStmt(ReturnStmt* stmt) {
     if (!isInFunction()) {
-        error(stmt->location, "Return statement outside of function");
+        // Match CPython wording
+        error(stmt->location, "'return' outside function");
         return;
     }
     
@@ -532,9 +684,8 @@ Type SemanticAnalyzer::analyzeExpression(const std::unique_ptr<Expr>& expr) {
             switch (symbol->kind) {
                 case Symbol::Kind::VARIABLE:
                 case Symbol::Kind::PARAMETER:
-                    // For now, assume variables and parameters are integers
-                    // In a real implementation, we would track their actual types
-                    return Type::INTEGER;
+                    // Return tracked type for variables/parameters
+                    return symbol->type;
                 case Symbol::Kind::FUNCTION:
                 case Symbol::Kind::BUILTIN:
                     // Functions return UNKNOWN type for now
@@ -545,6 +696,12 @@ Type SemanticAnalyzer::analyzeExpression(const std::unique_ptr<Expr>& expr) {
         }
         case ExprType::CALL:
             return analyzeCallExpr(dynamic_cast<CallExpr*>(expr.get()));
+        case ExprType::LIST:
+            return analyzeListExpr(dynamic_cast<ListExpr*>(expr.get()));
+        case ExprType::DICT:
+            return analyzeDictExpr(dynamic_cast<DictExpr*>(expr.get()));
+        case ExprType::INDEX_ACCESS:
+            return analyzeIndexAccessExpr(dynamic_cast<IndexAccessExpr*>(expr.get()));
         default:
             return Type::UNKNOWN;
     }
@@ -586,10 +743,12 @@ Type SemanticAnalyzer::analyzeBinaryExpr(BinaryExpr* expr) {
             }
             // Mark as initialized
             symbol->isInitialized = true;
+            symbol->type = rightType;
         } else {
             // Variable doesn't exist, create it (implicit variable declaration)
             auto newSymbol = std::make_unique<Symbol>(Symbol::Kind::VARIABLE, identifier->name, expr->op.location);
             newSymbol->isInitialized = true;
+            newSymbol->type = rightType;
             
             if (!symbolTable_->define(identifier->name, std::move(newSymbol))) {
                 error(expr->op.location, "Failed to define variable '" + identifier->name + "'");
@@ -639,7 +798,8 @@ Type SemanticAnalyzer::analyzeBinaryExpr(BinaryExpr* expr) {
     // Check other binary operations
     Type resultType = typeChecker_->checkBinaryOperation(leftType, rightType, expr->op.lexeme);
     
-    if (resultType == Type::UNKNOWN) {
+    // Only report an error if both operand types are known and the result is invalid
+    if (resultType == Type::UNKNOWN && leftType != Type::UNKNOWN && rightType != Type::UNKNOWN) {
         error(expr->op.location, "Invalid operands for binary operator '" + expr->op.lexeme + "'");
     }
     
@@ -655,7 +815,8 @@ Type SemanticAnalyzer::analyzeUnaryExpr(UnaryExpr* expr) {
     
     Type resultType = typeChecker_->checkUnaryOperation(operandType, expr->op);
     
-    if (resultType == Type::UNKNOWN) {
+    // Only report an error if operand type is known and the result is invalid
+    if (resultType == Type::UNKNOWN && operandType != Type::UNKNOWN) {
         error(expr->location, "Invalid operand for unary operator '" + expr->op + "'");
     }
     
@@ -729,24 +890,17 @@ Type SemanticAnalyzer::analyzeCallExpr(CallExpr* expr) {
         argTypes.push_back(analyzeExpression(arg));
     }
     
-    // Check if callee is a function
+    // Check if callee is a function identifier
     if (expr->callee->getType() == ExprType::IDENTIFIER) {
         auto identifier = dynamic_cast<IdentifierExpr*>(expr->callee.get());
         if (identifier) {
-            // Check if it's a built-in function
-            if (identifier->name == "print" || identifier->name == "input" || 
-                identifier->name == "len" || identifier->name == "range" ||
-                identifier->name == "int" || identifier->name == "float" || identifier->name == "str") {
-                return Type::UNKNOWN; // Built-in functions are always valid
-            }
-            
-            // Look for the function in all scopes
+            // Resolve symbol and accept either user-defined function or builtin function generically
             auto symbol = symbolTable_->resolve(identifier->name);
             if (!symbol) {
                 error(expr->location, "Undefined function '" + identifier->name + "'");
                 return Type::UNKNOWN;
             }
-            
+
             if (symbol->kind != Symbol::Kind::FUNCTION && symbol->kind != Symbol::Kind::BUILTIN) {
                 if (symbol->kind == Symbol::Kind::VARIABLE) {
                     error(expr->location, "'" + identifier->name + "' is a variable, not a function");
@@ -755,27 +909,111 @@ Type SemanticAnalyzer::analyzeCallExpr(CallExpr* expr) {
                 }
                 return Type::UNKNOWN;
             }
-            
-            // Check parameter count for user-defined functions
+
+            // Check parameter count for user-defined functions only
             if (symbol->kind == Symbol::Kind::FUNCTION) {
                 if (argTypes.size() != symbol->parameters.size()) {
-                    error(expr->location, "Function '" + identifier->name + "' expects " + 
-                          std::to_string(symbol->parameters.size()) + " arguments, got " + 
+                    error(expr->location, "Function '" + identifier->name + "' expects " +
+                          std::to_string(symbol->parameters.size()) + " arguments, got " +
                           std::to_string(argTypes.size()));
                     return Type::UNKNOWN;
                 }
             }
-            
-            // Mark function as used
+
+            // Mark as used
             symbol->used = true;
-            
-            return Type::UNKNOWN; // For now, all functions return UNKNOWN
+            return Type::UNKNOWN; // For now, all function calls return UNKNOWN
         }
     }
     
     // If not an identifier, it's an invalid function call
     error(expr->location, "Invalid function call");
     return Type::UNKNOWN;
+}
+
+Type SemanticAnalyzer::analyzeListExpr(ListExpr* expr) {
+    if (!expr) {
+        return Type::UNKNOWN;
+    }
+    
+    // Analyze all elements in the list
+    for (const auto& element : expr->elements) {
+        analyzeExpression(element);
+    }
+    
+    // Lists can contain elements of any type
+    return Type::LIST;
+}
+
+Type SemanticAnalyzer::analyzeDictExpr(DictExpr* expr) {
+    if (!expr) {
+        return Type::UNKNOWN;
+    }
+    
+    // Check that keys and values have the same number
+    if (expr->keys.size() != expr->values.size()) {
+        error(expr->location, "Dictionary keys and values count mismatch");
+        return Type::UNKNOWN;
+    }
+    
+    // Analyze all keys and values
+    for (const auto& key : expr->keys) {
+        Type keyType = analyzeExpression(key);
+        // Dictionary keys should be strings or integers
+        if (keyType != Type::STRING && keyType != Type::INTEGER && keyType != Type::UNKNOWN) {
+            error(key->getLocation(), "Dictionary keys must be strings or integers");
+        }
+    }
+    
+    for (const auto& value : expr->values) {
+        analyzeExpression(value);
+        // Dictionary values can be of any type
+    }
+    
+    return Type::DICT;
+}
+
+Type SemanticAnalyzer::analyzeIndexAccessExpr(IndexAccessExpr* expr) {
+    if (!expr) {
+        return Type::UNKNOWN;
+    }
+    
+    // Analyze the object being accessed
+    Type objectType = analyzeExpression(expr->object);
+    
+    // Analyze the index expression
+    Type indexType = analyzeExpression(expr->index);
+    
+    // Use TypeChecker to validate the index access
+    Type resultType = typeChecker_->checkIndexAccess(objectType, indexType);
+    
+    // Check if the object is a list or dictionary
+    if (objectType != Type::LIST && objectType != Type::DICT && objectType != Type::UNKNOWN) {
+        error(expr->object->getLocation(), "Index access is only supported for lists and dictionaries");
+        return Type::UNKNOWN;
+    }
+    
+    // For lists, index must be an integer
+    if (objectType == Type::LIST) {
+        if (indexType != Type::INTEGER && indexType != Type::UNKNOWN) {
+            error(expr->index->getLocation(), "List index must be an integer");
+            return Type::UNKNOWN;
+        }
+        // Return unknown type for list elements (they can be any type)
+        return Type::UNKNOWN;
+    }
+    
+    // For dictionaries, index must be a string or integer
+    if (objectType == Type::DICT) {
+        if (indexType != Type::STRING && indexType != Type::INTEGER && indexType != Type::UNKNOWN) {
+            error(expr->index->getLocation(), "Dictionary key must be a string or integer");
+            return Type::UNKNOWN;
+        }
+        // Return unknown type for dictionary values (they can be any type)
+        return Type::UNKNOWN;
+    }
+    
+    return resultType;
 }
 
 void SemanticAnalyzer::enterFunction(const std::string& name, const std::vector<std::string>& /* parameters */) {
@@ -841,6 +1079,16 @@ void SemanticAnalyzer::checkForUndefinedVariables(const std::unique_ptr<Expr>& e
                 for (const auto& arg : callExpr->arguments) {
                     checkForUndefinedVariables(arg);
                 }
+            }
+            break;
+        }
+        case ExprType::INDEX_ACCESS: {
+            auto indexAccessExpr = dynamic_cast<IndexAccessExpr*>(expr.get());
+            if (indexAccessExpr) {
+                // Check the object being accessed
+                checkForUndefinedVariables(indexAccessExpr->object);
+                // Check the index expression
+                checkForUndefinedVariables(indexAccessExpr->index);
             }
             break;
         }

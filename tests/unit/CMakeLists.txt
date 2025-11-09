@@ -1,0 +1,16 @@
+# Unit tests for RGLite
+
+create_unit_test(test_lexer)
+create_unit_test(test_ast)
+create_unit_test(test_parser)
+create_unit_test(test_semantic_analyzer)
+create_unit_test(test_bytecode)
+create_unit_test(test_vm)
+create_unit_test(test_exception)
+create_unit_test(test_list)
+create_unit_test(test_memory)
+create_unit_test(test_indent)
+create_unit_test(test_string_literal)
+create_unit_test(test_docstring)
+create_unit_test(test_builtins)
+create_unit_test(test_methods)
