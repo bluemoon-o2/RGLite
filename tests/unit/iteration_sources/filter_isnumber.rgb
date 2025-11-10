@@ -1,0 +1,6 @@
+it = filter(isnumber, [1, "x", 2.5])
+len_result = 0
+first = next(it)
+len_result = len_result + 1
+second = next(it)
+len_result = len_result + 1

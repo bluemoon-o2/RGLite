@@ -68,7 +68,7 @@ write_basic_package_version_file(
 )
 
 # Export targets
-install(TARGETS rglite rglite_common rglite_frontend rglite_backend rglite_builtin rglite_memory rglite_bytecode rglite_codegen rglite_vm EXPORT rglite-targets
+install(TARGETS rglite rglite_common rglite_frontend rglite_backend rglite_builtin rglite_runtime rglite_memory rglite_bytecode rglite_codegen rglite_vm EXPORT rglite-targets
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}

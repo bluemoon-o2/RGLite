@@ -177,6 +177,50 @@ std::string ReturnStmt::toString() const {
     return "ReturnStmt()";
 }
 
+// ImportStmt implementation
+void ImportStmt::accept(ASTVisitor& visitor) {
+    visitor.visitImportStmt(*this);
+}
+
+std::string ImportStmt::toString() const {
+    std::stringstream ss;
+    ss << "ImportStmt([";
+    for (size_t i = 0; i < items.size(); ++i) {
+        if (i > 0) ss << ", ";
+        ss << items[i].module;
+        if (!items[i].alias.empty()) {
+            ss << " as " << items[i].alias;
+        }
+    }
+    ss << "])";
+    return ss.str();
+}
+
+// FromImportStmt implementation
+void FromImportStmt::accept(ASTVisitor& visitor) {
+    visitor.visitFromImportStmt(*this);
+}
+
+std::string FromImportStmt::toString() const {
+    std::stringstream ss;
+    ss << "FromImportStmt(module: " << module << ", names: ";
+    if (importAll) {
+        ss << "*";
+    } else {
+        ss << "[";
+        for (size_t i = 0; i < names.size(); ++i) {
+            if (i > 0) ss << ", ";
+            ss << names[i].name;
+            if (!names[i].alias.empty()) {
+                ss << " as " << names[i].alias;
+            }
+        }
+        ss << "]";
+    }
+    ss << ")";
+    return ss.str();
+}
+
 // MemberAccessExpr implementation
 void MemberAccessExpr::accept(ASTVisitor& visitor) {
     visitor.visitMemberAccessExpr(*this);

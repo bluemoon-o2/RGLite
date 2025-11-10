@@ -4,8 +4,9 @@
     </p>
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/bluemoon-o2/RGLite)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)]()
+[![License](https://img.shields.io/badge/license-Apache%202.0-purple.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-orange.svg)]()
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/bluemoon-o2/RGLite)
 
 [![Build and Test](https://github.com/bluemoon-o2/RGLite/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/bluemoon-o2/RGLite/actions/workflows/build-and-test.yml)
 [![Code Quality](https://github.com/bluemoon-o2/RGLite/actions/workflows/code-quality.yml/badge.svg)](https://github.com/bluemoon-o2/RGLite/actions/workflows/code-quality.yml)
@@ -28,6 +29,12 @@
   - 面向编程入门教学，语法极简易理解
   - 支持快速脚本开发，降低编码成本
 - **依赖环境**: 跨平台（Windows/macOS/Linux），需安装RGLite解释器（约5MB轻量包）
+
+<div align="center">
+    <p>
+        <img src="./docs/img/banner%20(6).png" alt="RGLite Banner">
+    </p>
+</div>
 
 ## 快速开始
 
@@ -214,3 +221,9 @@ RGLite/
 ## 致谢
 
 感谢所有为 RGLite 项目做出贡献的开发者！
+
+<div align="center">
+    <p>
+        <img src="./docs/img/banner%20(9).png" alt="RGLite Banner">
+    </p>
+</div>

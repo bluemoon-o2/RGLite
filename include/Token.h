@@ -40,6 +40,9 @@ enum class TokenType : uint16_t {
     KW_OR,
     KW_NOT,
     KW_IN,
+    KW_IMPORT,
+    KW_FROM,
+    KW_AS,
     KW_TUPLE,
     KW_SET,
     

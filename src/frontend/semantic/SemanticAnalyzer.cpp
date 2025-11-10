@@ -79,6 +79,7 @@ void SymbolTable::defineBuiltins() {
     // I/O and core
     define("print", std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "print", SourceLocation()));
     define("len",   std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "len",   SourceLocation()));
+    define("range", std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "range", SourceLocation()));
 
     // Type checking
     define("type",       std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "type",       SourceLocation()));
@@ -102,31 +103,37 @@ void SymbolTable::defineBuiltins() {
     define("str",    std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "str",    SourceLocation()));
     define("substr", std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "substr", SourceLocation()));
 
-    // List functions
-    define("append",    std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "append",    SourceLocation()));
-    define("remove",    std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "remove",    SourceLocation()));
-    define("extend",    std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "extend",    SourceLocation()));
-    define("insert",    std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "insert",    SourceLocation()));
-    define("pop",       std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "pop",       SourceLocation()));
-    define("clear",     std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "clear",     SourceLocation()));
-    define("sort",      std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "sort",      SourceLocation()));
-    define("reverse",   std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "reverse",   SourceLocation()));
-    define("count",     std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "count",     SourceLocation()));
-    define("index",     std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "index",     SourceLocation()));
-    define("list_copy", std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "list_copy", SourceLocation()));
+    // Iteration and combination
+    define("iter",       std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "iter",       SourceLocation()));
+    define("next",       std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "next",       SourceLocation()));
+    define("enumerate",  std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "enumerate",  SourceLocation()));
+    define("zip",        std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "zip",        SourceLocation()));
+    define("map",        std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "map",        SourceLocation()));
+    define("filter",     std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "filter",     SourceLocation()));
 
-    // Dict functions
-    define("keys",       std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "keys",       SourceLocation()));
-    define("values",     std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "values",     SourceLocation()));
-    define("contains",   std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "contains",   SourceLocation()));
-    define("update",     std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "update",     SourceLocation()));
-    define("get",        std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "get",        SourceLocation()));
-    define("copy",       std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "copy",       SourceLocation()));
-    define("fromkeys",   std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "fromkeys",   SourceLocation()));
-    define("items",      std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "items",      SourceLocation()));
-    define("dict_pop",   std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "dict_pop",   SourceLocation()));
-    define("popitem",    std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "popitem",    SourceLocation()));
-    define("setdefault", std::make_unique<Symbol>(Symbol::Kind::BUILTIN, "setdefault", SourceLocation()));
+    // Define built-in module globals: __name__, __file__, __doc__
+    // These are always available at runtime and must be treated as defined
+    // at semantic analysis to avoid false "Undefined variable" diagnostics.
+    {
+        auto nameSym = std::make_unique<Symbol>(Symbol::Kind::VARIABLE, "__name__", SourceLocation());
+        nameSym->isInitialized = true; // VM initializes to module name
+        nameSym->type = Type::STRING;  // Module name is a string
+        define("__name__", std::move(nameSym));
+    }
+
+    {
+        auto fileSym = std::make_unique<Symbol>(Symbol::Kind::VARIABLE, "__file__", SourceLocation());
+        fileSym->isInitialized = true; // VM initializes to filename
+        fileSym->type = Type::STRING;  // Filename is a string
+        define("__file__", std::move(fileSym));
+    }
+
+    {
+        auto docSym = std::make_unique<Symbol>(Symbol::Kind::VARIABLE, "__doc__", SourceLocation());
+        docSym->isInitialized = true; // VM sets to NIL by default, or string if docstring exists
+        docSym->type = Type::UNKNOWN; // Could be NONE/NIL or STRING depending on module
+        define("__doc__", std::move(docSym));
+    }
 }
 
 // TypeChecker implementation
@@ -396,6 +403,7 @@ SemanticAnalyzer::SemanticAnalyzer(std::shared_ptr<ErrorHandler> errorHandler)
     
     symbolTable_ = std::make_shared<SymbolTable>();
     typeChecker_ = std::make_unique<TypeChecker>(errorHandler_);
+    hasImportAll_ = false;
 }
 
 bool SemanticAnalyzer::analyze(const std::unique_ptr<Stmt>& ast) {
@@ -478,6 +486,12 @@ void SemanticAnalyzer::analyzeStatement(const std::unique_ptr<Stmt>& stmt) {
             break;
         case StmtType::RETURN_STMT:
             analyzeReturnStmt(dynamic_cast<ReturnStmt*>(stmt.get()));
+            break;
+        case StmtType::IMPORT_STMT:
+            analyzeImportStmt(dynamic_cast<ImportStmt*>(stmt.get()));
+            break;
+        case StmtType::FROM_IMPORT_STMT:
+            analyzeFromImportStmt(dynamic_cast<FromImportStmt*>(stmt.get()));
             break;
     }
 }
@@ -700,6 +714,14 @@ Type SemanticAnalyzer::analyzeExpression(const std::unique_ptr<Expr>& expr) {
             return analyzeListExpr(dynamic_cast<ListExpr*>(expr.get()));
         case ExprType::DICT:
             return analyzeDictExpr(dynamic_cast<DictExpr*>(expr.get()));
+        case ExprType::MEMBER_ACCESS: {
+            // Analyze object part of member access and return unknown type
+            auto member = dynamic_cast<MemberAccessExpr*>(expr.get());
+            if (member) {
+                analyzeExpression(member->object);
+            }
+            return Type::UNKNOWN;
+        }
         case ExprType::INDEX_ACCESS:
             return analyzeIndexAccessExpr(dynamic_cast<IndexAccessExpr*>(expr.get()));
         default:
@@ -712,58 +734,70 @@ Type SemanticAnalyzer::analyzeBinaryExpr(BinaryExpr* expr) {
         return Type::UNKNOWN;
     }
     
-    // For assignment operations, handle variable creation/update first
+    // For assignment operations, handle variable/member/index update first
     if (expr->op.lexeme == "=") {
-        // Check if left operand is an identifier (valid assignment target)
-        if (expr->left->getType() != ExprType::IDENTIFIER) {
-            error(expr->op.location, "Invalid assignment target");
-            return Type::UNKNOWN;
-        }
-        
-        auto identifier = dynamic_cast<IdentifierExpr*>(expr->left.get());
-        if (!identifier) {
-            error(expr->op.location, "Invalid assignment target");
-            return Type::UNKNOWN;
-        }
-        
-        // Analyze right side first to get its type
-        Type rightType = analyzeExpression(expr->right);
-        
-        // Check if variable is already defined
-        auto symbol = symbolTable_->resolve(identifier->name);
-        if (symbol) {
-            // Variable already exists, check if it's a valid assignment target
-            if (symbol->kind != Symbol::Kind::VARIABLE) {
-                if (symbol->kind == Symbol::Kind::FUNCTION) {
-                    error(expr->op.location, "'" + identifier->name + "' is a function, not a variable");
-                } else {
-                    error(expr->op.location, "'" + identifier->name + "' is a parameter, not a variable");
+        switch (expr->left->getType()) {
+            case ExprType::IDENTIFIER: {
+                auto identifier = dynamic_cast<IdentifierExpr*>(expr->left.get());
+                if (!identifier) {
+                    error(expr->op.location, "Invalid assignment target");
+                    return Type::UNKNOWN;
                 }
-                return Type::UNKNOWN;
+                // Analyze right side first to get its type
+                Type rightType = analyzeExpression(expr->right);
+                // Check if variable is already defined
+                auto symbol = symbolTable_->resolve(identifier->name);
+                if (symbol) {
+                    // Variable already exists, check if it's a valid assignment target
+                    if (symbol->kind != Symbol::Kind::VARIABLE) {
+                        if (symbol->kind == Symbol::Kind::FUNCTION) {
+                            error(expr->op.location, "'" + identifier->name + "' is a function, not a variable");
+                        } else {
+                            error(expr->op.location, "'" + identifier->name + "' is a parameter, not a variable");
+                        }
+                        return Type::UNKNOWN;
+                    }
+                    // Mark as initialized
+                    symbol->isInitialized = true;
+                    symbol->type = rightType;
+                } else {
+                    // Variable doesn't exist, create it (implicit variable declaration)
+                    auto newSymbol = std::make_unique<Symbol>(Symbol::Kind::VARIABLE, identifier->name, expr->op.location);
+                    newSymbol->isInitialized = true;
+                    newSymbol->type = rightType;
+                    if (!symbolTable_->define(identifier->name, std::move(newSymbol))) {
+                        error(expr->op.location, "Failed to define variable '" + identifier->name + "'");
+                        return Type::UNKNOWN;
+                    }
+                }
+                checkForUndefinedVariables(expr->right);
+                return rightType;
             }
-            // Mark as initialized
-            symbol->isInitialized = true;
-            symbol->type = rightType;
-        } else {
-            // Variable doesn't exist, create it (implicit variable declaration)
-            auto newSymbol = std::make_unique<Symbol>(Symbol::Kind::VARIABLE, identifier->name, expr->op.location);
-            newSymbol->isInitialized = true;
-            newSymbol->type = rightType;
-            
-            if (!symbolTable_->define(identifier->name, std::move(newSymbol))) {
-                error(expr->op.location, "Failed to define variable '" + identifier->name + "'");
-                return Type::UNKNOWN;
+            case ExprType::MEMBER_ACCESS: {
+                // Analyze the object part to ensure it's valid; member type is dynamic
+                auto member = dynamic_cast<MemberAccessExpr*>(expr->left.get());
+                if (member && member->object) {
+                    analyzeExpression(member->object);
+                }
+                Type rightType = analyzeExpression(expr->right);
+                checkForUndefinedVariables(expr->right);
+                return rightType;
             }
+            case ExprType::INDEX_ACCESS: {
+                // Validate index access semantics
+                auto indexAccess = dynamic_cast<IndexAccessExpr*>(expr->left.get());
+                if (indexAccess) {
+                    // Use existing index access analyzer for type checks
+                    analyzeIndexAccessExpr(indexAccess);
+                }
+                Type rightType = analyzeExpression(expr->right);
+                checkForUndefinedVariables(expr->right);
+                return rightType;
+            }
+            default:
+                error(expr->op.location, "Invalid assignment target");
+                return Type::UNKNOWN;
         }
-        
-        // For assignment operations, we need to check if the right side contains undefined variables
-        // This is where we report errors for undefined variables in assignment expressions
-        // But only check if we're not in a function body (to avoid reporting function parameters as undefined)
-        // However, we should still check for undefined variables in the right side even in function body
-        // because function parameters are already defined and shouldn't be reported as undefined
-        checkForUndefinedVariables(expr->right);
-        
-        return rightType;
     }
     
     // For non-assignment operations, analyze both sides normally
@@ -853,9 +887,10 @@ std::shared_ptr<Symbol> SemanticAnalyzer::analyzeIdentifierExpr(IdentifierExpr* 
     // Look up the symbol in the current scope
     Symbol* symbol = symbolTable_->resolve(expr->name);
     if (!symbol) {
-        // Now report undefined variable error unconditionally
-        // Function parameters are already defined and won't be reported as undefined
-        error(expr->location, "Undefined variable '" + expr->name + "'");
+        // If a wildcard import was used earlier, imported names are unknown at analysis time
+        if (!hasImportAll_) {
+            error(expr->location, "Undefined variable '" + expr->name + "'");
+        }
         return nullptr;
     }
     
@@ -879,6 +914,42 @@ std::shared_ptr<Symbol> SemanticAnalyzer::analyzeIdentifierExpr(IdentifierExpr* 
     return std::shared_ptr<Symbol>(symbol, noOpDeleter);
 }
 
+void SemanticAnalyzer::analyzeImportStmt(ImportStmt* stmt) {
+    if (!stmt) return;
+    // Define bound names for each import item: alias or top-level package (first segment)
+    for (const auto& item : stmt->items) {
+        std::string boundName = !item.alias.empty() ? item.alias : std::string(item.module.substr(0, item.module.find('.')));
+        auto currentScope = symbolTable_->getCurrentScope();
+        if (currentScope && currentScope->resolve(boundName)) {
+            // Already defined in this scope; skip redefining
+            continue;
+        }
+        auto sym = std::make_unique<Symbol>(Symbol::Kind::VARIABLE, boundName, stmt->location);
+        sym->isInitialized = true; // import binds a value at runtime
+        sym->type = Type::UNKNOWN; // module/package type is dynamic
+        symbolTable_->define(boundName, std::move(sym));
+    }
+}
+
+void SemanticAnalyzer::analyzeFromImportStmt(FromImportStmt* stmt) {
+    if (!stmt) return;
+    if (stmt->importAll) {
+        hasImportAll_ = true; // Relax undefined-variable diagnostics after wildcard import
+        return;
+    }
+    for (const auto& nameItem : stmt->names) {
+        std::string boundName = nameItem.alias.empty() ? nameItem.name : nameItem.alias;
+        auto currentScope = symbolTable_->getCurrentScope();
+        if (currentScope && currentScope->resolve(boundName)) {
+            continue;
+        }
+        auto sym = std::make_unique<Symbol>(Symbol::Kind::VARIABLE, boundName, stmt->location);
+        sym->isInitialized = true; // import binds a value at runtime
+        sym->type = Type::UNKNOWN; // could be function or value
+        symbolTable_->define(boundName, std::move(sym));
+    }
+}
+
 Type SemanticAnalyzer::analyzeCallExpr(CallExpr* expr) {
     if (!expr) {
         return Type::UNKNOWN;
@@ -890,23 +961,24 @@ Type SemanticAnalyzer::analyzeCallExpr(CallExpr* expr) {
         argTypes.push_back(analyzeExpression(arg));
     }
     
-    // Check if callee is a function identifier
+    // Check if callee is an identifier; allow calling variables bound to functions
     if (expr->callee->getType() == ExprType::IDENTIFIER) {
         auto identifier = dynamic_cast<IdentifierExpr*>(expr->callee.get());
         if (identifier) {
             // Resolve symbol and accept either user-defined function or builtin function generically
             auto symbol = symbolTable_->resolve(identifier->name);
             if (!symbol) {
-                error(expr->location, "Undefined function '" + identifier->name + "'");
+                // After 'from X import *', imported names are unknown at analysis time;
+                // relax undefined-function diagnostics similar to identifier handling.
+                if (!hasImportAll_) {
+                    error(expr->location, "Undefined function '" + identifier->name + "'");
+                }
                 return Type::UNKNOWN;
             }
-
+            // Accept calls to variables, builtins, and functions. Only enforce arity for declared functions.
             if (symbol->kind != Symbol::Kind::FUNCTION && symbol->kind != Symbol::Kind::BUILTIN) {
-                if (symbol->kind == Symbol::Kind::VARIABLE) {
-                    error(expr->location, "'" + identifier->name + "' is a variable, not a function");
-                } else {
-                    error(expr->location, "'" + identifier->name + "' is a parameter, not a function");
-                }
+                // VARIABLE or PARAMETER: dynamic call site, skip static arity checks
+                symbol->used = true;
                 return Type::UNKNOWN;
             }
 
@@ -926,7 +998,16 @@ Type SemanticAnalyzer::analyzeCallExpr(CallExpr* expr) {
         }
     }
     
-    // If not an identifier, it's an invalid function call
+    // Allow method calls with member access as callee: obj.method(...)
+    if (expr->callee->getType() == ExprType::MEMBER_ACCESS) {
+        auto member = dynamic_cast<MemberAccessExpr*>(expr->callee.get());
+        if (member && member->object) {
+            analyzeExpression(member->object);
+        }
+        return Type::UNKNOWN;
+    }
+
+    // If not an identifier or member-access, it's an invalid function call in current semantics
     error(expr->location, "Invalid function call");
     return Type::UNKNOWN;
 }

@@ -68,6 +68,8 @@ private:
     std::unique_ptr<WhileStmt> parseWhileStatement();
     std::unique_ptr<ForStmt> parseForStatement();
     std::unique_ptr<ReturnStmt> parseReturnStatement();
+    std::unique_ptr<ImportStmt> parseImportStatement();
+    std::unique_ptr<FromImportStmt> parseFromImportStatement();
     
     std::unique_ptr<Expr> parseExpression();
     std::unique_ptr<Expr> parseAssignment();

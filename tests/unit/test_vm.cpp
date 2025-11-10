@@ -384,5 +384,42 @@ TEST(VMTests, InOperatorSuccessScenarios) {
     }
 }
 
+// Test attribute assignment on dictionary using SET_ATTR
+TEST(VMTests, AttributeAssignmentDict) {
+    Chunk chunk;
+
+    // Build empty dict and store to a variable
+    chunk.addInstruction(Instruction(OpCode::BUILD_DICT, 0));
+    size_t constVarName = chunk.addConstant(Value(std::string("d")));
+    chunk.addInstruction(Instruction(OpCode::STORE_VAR, static_cast<uint32_t>(constVarName)));
+
+    // Load dict, attribute name, and value, then assign
+    chunk.addInstruction(Instruction(OpCode::LOAD_VAR, static_cast<uint32_t>(constVarName))); // object
+    size_t constAttr = chunk.addConstant(Value(std::string("x")));
+    chunk.addInstruction(Instruction(OpCode::LOAD_CONST, static_cast<uint32_t>(constAttr)));   // attribute
+    size_t constVal = chunk.addConstant(Value(static_cast<int64_t>(42)));
+    chunk.addInstruction(Instruction(OpCode::LOAD_CONST, static_cast<uint32_t>(constVal)));    // value
+    chunk.addInstruction(Instruction(OpCode::SET_ATTR));
+
+    // Read back the attribute to verify
+    chunk.addInstruction(Instruction(OpCode::LOAD_VAR, static_cast<uint32_t>(constVarName))); // object
+    chunk.addInstruction(Instruction(OpCode::LOAD_CONST, static_cast<uint32_t>(constAttr)));   // attribute
+    chunk.addInstruction(Instruction(OpCode::GET_ATTR));
+    chunk.addInstruction(Instruction(OpCode::HALT));
+
+    VM vm;
+    bool result = vm.interpret(chunk);
+
+    EXPECT_TRUE(result);
+    EXPECT_FALSE(vm.hasException());
+
+    // Top of stack should be 42
+    if (vm.getStackSize() > 0) {
+        Value stackTop = vm.peek();
+        EXPECT_TRUE(stackTop.isInteger());
+        EXPECT_EQ(42, stackTop.asInteger());
+    }
+}
+
 // Main test runner
 RUN_ALL_TESTS()

@@ -1,0 +1,5 @@
+it = iter("ab")
+next(it)
+next(it)
+val = next(it, "X")
+

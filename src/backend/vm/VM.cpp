@@ -11,6 +11,7 @@
 #include "BuiltinFunctions.h"
 #include "CodeGenerator.h"
 #include <iostream>
+#include <cstdlib>
 #include <stdexcept>
 #include <cmath>
 #include <unordered_set>
@@ -56,6 +57,8 @@ VM::VM()
     , iteratorStorage_()
     , memoryManager_()
 {
+    const char* env = std::getenv("RGLITE_DEBUG");
+    debugLogging_ = (env != nullptr);
     // Initialize with an empty stack and frame stack
     resetStack();
     
@@ -93,6 +96,8 @@ VM::VM(CodeGenerator* codeGenerator)
     , iteratorStorage_()
     , memoryManager_()
 {
+    const char* env = std::getenv("RGLITE_DEBUG");
+    debugLogging_ = (env != nullptr);
     // Initialize with an empty stack and frame stack
     resetStack();
     
@@ -132,8 +137,65 @@ bool VM::interpret(const Chunk& chunk, const std::string& filename) {
     
     resetStack();
     clearException();
+    // Initialize Python-like special module variables in globals
+    // __name__ is "__main__" when executing a script directly; __file__ is the filename.
+    // __doc__ defaults to NIL (None) unless explicitly set by code generation.
+    // Always initialize special module variables; later user code may overwrite __doc__
+    globals_["__name__"] = Value(std::string("__main__"));
+    globals_["__file__"] = Value(filename_);
+    // Initialize __doc__ to NIL by default; codegen may set it to a string if a module docstring exists
+    globals_["__doc__"] = Value();
+    if (debugLogging_) {
+        std::cerr << "[debug] interpret file=" << filename_ 
+                  << ", consts=" << currentChunk_->getConstants().size() 
+                  << ", instrs=" << currentChunk_->getInstructions().size() << std::endl;
+        std::cerr << "[debug] variableNames.size=" << variableNames_.size() << std::endl;
+        std::cerr << "[debug] init globals: __name__='" << globals_["__name__"].asString() << "', __file__='" << filename_ << "'" << std::endl;
+    }
     
     return run();
+}
+
+// Execute a chunk without destroying caller execution state
+bool VM::executeChunkIsolated(const Chunk& chunk, const std::string& filename) {
+    // Save caller state
+    const Chunk* savedEntry = entryChunk_;
+    const Chunk* savedCurrent = currentChunk_;
+    size_t savedIP = ip_;
+    std::vector<CallFrame> savedFrames = frames_;
+    std::vector<Value> savedStack = stack_;
+    std::string savedFilename = filename_;
+    bool savedHadError = hadError_;
+    ExceptionState savedExceptionState = exceptionState_;
+    auto savedExceptions = exceptions_;
+    // Snapshot variable name mapping to avoid cross-module pollution
+    auto savedVariableNames = variableNames_;
+
+    // Prepare for module execution
+    entryChunk_ = &chunk;
+    currentChunk_ = entryChunk_;
+    filename_ = filename;
+    ip_ = 0;
+    frames_.clear();
+    stack_.clear();
+    clearException();
+
+    bool ok = run();
+
+    // Restore caller state
+    entryChunk_ = savedEntry;
+    currentChunk_ = savedCurrent;
+    ip_ = savedIP;
+    frames_ = std::move(savedFrames);
+    stack_ = std::move(savedStack);
+    filename_ = std::move(savedFilename);
+    hadError_ = savedHadError;
+    exceptionState_ = savedExceptionState;
+    exceptions_ = std::move(savedExceptions);
+    // Restore variable name mapping to caller context
+    variableNames_ = std::move(savedVariableNames);
+
+    return ok;
 }
 
 // Execute the current chunk
@@ -203,12 +265,43 @@ bool VM::run() {
                     varName = "var_" + std::to_string(instruction.operand);
                 }
 
+                // Alias to support legacy storage when name mapping wasn't available at STORE time
+                // This helps cases like module-level docstrings set before VM received name mapping.
+                const std::string aliasName = "var_" + std::to_string(instruction.operand);
+                if (debugLogging_) {
+                    std::cerr << "[debug] LOAD_VAR idx=" << instruction.operand
+                              << ", name='" << varName << "', alias='" << aliasName << "'" << std::endl;
+                }
+
+                // Special-case module builtins: '__name__', '__file__', '__doc__'
+                // These should always be accessible as globals, even when no prior STORE happened
+                if (varName == "__name__" || varName == "__file__" || varName == "__doc__") {
+                    if (debugLogging_) {
+                        std::cerr << "[debug] LOAD_VAR builtin immediate '" << varName << "'" << std::endl;
+                    }
+                    // operator[] ensures an entry exists; '__doc__' defaults to NIL
+                    push(globals_[varName]);
+                    break;
+                }
+
                 // Prefer loading from current frame's locals if available
                 if (!frames_.empty()) {
                     auto &locals = frames_.back().locals;
                     auto lit = locals.find(varName);
                     if (lit != locals.end()) {
+                        if (debugLogging_) {
+                            std::cerr << "[debug] LOAD_VAR hit locals name='" << varName << "'" << std::endl;
+                        }
                         push(lit->second);
+                        break;
+                    }
+                    // Try alias fallback in locals
+                    auto litAlias = locals.find(aliasName);
+                    if (litAlias != locals.end()) {
+                        if (debugLogging_) {
+                            std::cerr << "[debug] LOAD_VAR hit locals alias='" << aliasName << "'" << std::endl;
+                        }
+                        push(litAlias->second);
                         break;
                     }
                 }
@@ -216,8 +309,29 @@ bool VM::run() {
                 // Fallback to global variables
                 auto git = globals_.find(varName);
                 if (git == globals_.end()) {
-                    throwException(ExceptionBuilder::nameError("name '" + varName + "' is not defined"));
+                    // Try alias fallback in globals
+                    auto gitAlias = globals_.find(aliasName);
+                    if (gitAlias == globals_.end()) {
+                        if (debugLogging_) {
+                            std::cerr << "[debug] LOAD_VAR miss globals for '" << varName
+                                      << "' and alias '" << aliasName << "'" << std::endl;
+                            std::cerr << "[debug] globals keys:";
+                            for (const auto& kv : globals_) {
+                                std::cerr << " " << kv.first;
+                            }
+                            std::cerr << std::endl;
+                        }
+                        throwException(ExceptionBuilder::nameError(varName));
+                        break;
+                    }
+                    if (debugLogging_) {
+                        std::cerr << "[debug] LOAD_VAR hit globals alias='" << aliasName << "'" << std::endl;
+                    }
+                    push(gitAlias->second);
                     break;
+                }
+                if (debugLogging_) {
+                    std::cerr << "[debug] LOAD_VAR hit globals name='" << varName << "'" << std::endl;
                 }
                 push(git->second);
                 break;
@@ -234,13 +348,33 @@ bool VM::run() {
                 } else {
                     varName = "var_" + std::to_string(instruction.operand);
                 }
+                if (debugLogging_) {
+                    std::cerr << "[debug] STORE_VAR idx=" << instruction.operand
+                              << ", name='" << varName << "'" << std::endl;
+                }
+
+                // Extra debug for module docstring storage
+                if (debugLogging_ && varName == "__doc__") {
+                    const Value& v = peek();
+                    std::cerr << "[debug] STORE_VAR '__doc__' value type=" << pythonTypeName(v);
+                    if (v.isString()) {
+                        std::cerr << ", length=" << v.asString().size();
+                    }
+                    std::cerr << std::endl;
+                }
 
                 // Prefer storing into the current frame's locals if inside a function
                 if (!frames_.empty()) {
                     frames_.back().locals[varName] = peek();
+                    if (debugLogging_) {
+                        std::cerr << "[debug] STORE_VAR -> locals name='" << varName << "'" << std::endl;
+                    }
                 } else {
                     // Store globally when not inside any frame
                     globals_[varName] = peek();
+                    if (debugLogging_) {
+                        std::cerr << "[debug] STORE_VAR -> globals name='" << varName << "'" << std::endl;
+                    }
                 }
                 break;
             }
@@ -497,19 +631,11 @@ bool VM::run() {
                     // Preserve function and arguments on the stack for user-defined calls.
                     Value callee = peek(argCount);
                     
-                    // Get the function object from the function index
-                    uint32_t functionIndex = callee.asIndex();
-                    
-                    // Check if we have access to code generator
-                    if (!codeGenerator_) {
-                        throwException(ExceptionBuilder::runtimeError("Cannot call user-defined function: no code generator available"));
-                        break;
-                    }
-                    
-                    // Get the actual function object from code generator
-                    auto functionObj = codeGenerator_->getFunctionByIndex(functionIndex);
+                    // Get the function object from the VM-wide registry
+                    uint32_t functionId = callee.asIndex();
+                    auto functionObj = getFunctionById(functionId);
                     if (!functionObj) {
-                        throwException(ExceptionBuilder::runtimeError("Function index out of range: " + std::to_string(functionIndex)));
+                        throwException(ExceptionBuilder::runtimeError("Function id not found: " + std::to_string(functionId)));
                         break;
                     }
                     
@@ -717,14 +843,16 @@ bool VM::run() {
                     if (idx < 0) {
                         idx = list->size() + idx; // Convert negative index to positive
                         if (idx < 0) {
-                            throwException(ExceptionBuilder::runtimeError("List index out of bounds"));
+                            // Match CPython wording
+                            throwException(Exception(ExceptionType::INDEX_ERROR, "list index out of range"));
                             break;
                         }
                     }
                     
                     Value item = list->get(static_cast<size_t>(idx));
                     if (item.isNil()) {
-                        throwException(ExceptionBuilder::runtimeError("List index out of bounds"));
+                        // Match CPython wording
+                        throwException(Exception(ExceptionType::INDEX_ERROR, "list index out of range"));
                         break;
                     }
                     
@@ -744,7 +872,12 @@ bool VM::run() {
                     }
                     
                     Value item = dict->get(index.asString());
-                    push(item); // Will return nil if key not found
+                    if (item.isNil()) {
+                        // Raise KeyError when key not found, match Python exactly
+                        throwException(ExceptionBuilder::keyError(index.asString()));
+                        break;
+                    }
+                    push(item);
                 } else if (container.isTuple()) {
                     if (!index.isInteger()) {
                         throwException(ExceptionBuilder::typeError("integer", "non-integer index"));
@@ -764,14 +897,16 @@ bool VM::run() {
                     if (idx < 0) {
                         idx = tuple->size() + idx; // Convert negative index to positive
                         if (idx < 0) {
-                            throwException(ExceptionBuilder::runtimeError("Tuple index out of bounds"));
+                            // Match CPython wording
+                            throwException(Exception(ExceptionType::INDEX_ERROR, "tuple index out of range"));
                             break;
                         }
                     }
                     
                     Value item = tuple->get(static_cast<size_t>(idx));
                     if (item.isNil()) {
-                        throwException(ExceptionBuilder::runtimeError("Tuple index out of bounds"));
+                        // Match CPython wording
+                        throwException(Exception(ExceptionType::INDEX_ERROR, "tuple index out of range"));
                         break;
                     }
                     
@@ -798,6 +933,7 @@ bool VM::run() {
                         idx += static_cast<int64_t>(len);
                     }
                     if (idx < 0 || static_cast<size_t>(idx) >= len) {
+                        // Already matches CPython wording
                         throwException(Exception(ExceptionType::INDEX_ERROR, "string index out of range"));
                         break;
                     }
@@ -839,13 +975,15 @@ bool VM::run() {
                     if (idx < 0) {
                         idx = list->size() + idx; // Convert negative index to positive
                         if (idx < 0) {
-                            throwException(ExceptionBuilder::runtimeError("List index out of bounds"));
+                            // Match CPython wording
+                            throwException(Exception(ExceptionType::INDEX_ERROR, "list index out of range"));
                             break;
                         }
                     }
                     
                     if (!list->set(static_cast<size_t>(idx), value)) {
-                        throwException(ExceptionBuilder::runtimeError("List index out of bounds"));
+                        // Match CPython wording
+                        throwException(Exception(ExceptionType::INDEX_ERROR, "list index out of range"));
                         break;
                     }
                     
@@ -1010,8 +1148,12 @@ bool VM::run() {
                     // Create a set iterator
                     size_t iterIndex = iteratorStorage_.createSetIterator(set);
                     push(Value(static_cast<uint32_t>(iterIndex), ValueType::ITERATOR));
+                } else if (container.isString()) {
+                    // Create a string iterator over characters
+                    size_t iterIndex = iteratorStorage_.createStringIterator(container.asString());
+                    push(Value(static_cast<uint32_t>(iterIndex), ValueType::ITERATOR));
                 } else {
-                    throwException(ExceptionBuilder::typeError("list, dict, tuple or set", "non-iterable type"));
+                    throwException(ExceptionBuilder::typeError("list, dict, tuple, set or string", "non-iterable type"));
                     break;
                 }
                 break;
@@ -1195,12 +1337,8 @@ bool VM::run() {
                     }
                 } else if (object.isFunction()) {
                     // Function attributes: __doc__, __name__
-                    uint32_t funcIndex = object.asIndex();
-                    if (!codeGenerator_) {
-                        throwException(ExceptionBuilder::runtimeError("Code generator not available for function attribute access"));
-                        break;
-                    }
-                    auto funcShared = codeGenerator_->getFunctionByIndex(funcIndex);
+                    uint32_t funcId = object.asIndex();
+                    auto funcShared = getFunctionById(funcId);
                     const Function* funcObj = funcShared.get();
                     if (!funcObj) {
                         throwException(ExceptionBuilder::runtimeError("Invalid function reference"));
@@ -1219,6 +1357,79 @@ bool VM::run() {
                     } else {
                         throwException(ExceptionBuilder::runtimeError("Function has no attribute '" + attrName + "'"));
                         
+                    }
+                } else {
+                    throwException(ExceptionBuilder::runtimeError("Object has no attribute '" + attrName + "'"));
+                }
+                break;
+            }
+            case OpCode::SET_ATTR: {
+                if (stack_.size() < 3) {
+                    throwException(ExceptionBuilder::runtimeError("Not enough operands for SET_ATTR"));
+                    break;
+                }
+
+                // Pop value, attribute name, and object
+                Value value = pop();
+                Value attributeName = pop();
+                Value object = pop();
+
+                if (!attributeName.isString()) {
+                    throwException(ExceptionBuilder::typeError("string", "non-string attribute name"));
+                    break;
+                }
+
+                std::string attrName = attributeName.asString();
+
+                if (object.isDict()) {
+                    // Disallow overriding built-in method names
+                    const std::unordered_set<std::string> dictMethods = {
+                        "keys", "values", "items", "update", "get", "pop", "popitem", "setdefault", "copy", "fromkeys", "clear"
+                    };
+                    if (dictMethods.count(attrName)) {
+                        throwException(ExceptionBuilder::runtimeError("Cannot assign to dict method '" + attrName + "'"));
+                        break;
+                    }
+
+                    uint32_t dictIndex = object.asIndex();
+                    DictValue* dict = dictStorage_.getDict(dictIndex);
+                    if (!dict) {
+                        throwException(ExceptionBuilder::runtimeError("Invalid dictionary reference"));
+                        break;
+                    }
+
+                    dict->set(attrName, value);
+                    // Leave assigned value on the stack
+                    push(value);
+                } else if (object.isList()) {
+                    // Lists do not support arbitrary attribute assignment
+                    throwException(ExceptionBuilder::runtimeError("List has no attribute '" + attrName + "'"));
+                } else if (object.isString()) {
+                    throwException(ExceptionBuilder::runtimeError("String has no attribute '" + attrName + "'"));
+                } else if (object.isTuple()) {
+                    throwException(ExceptionBuilder::runtimeError("Tuple has no attribute '" + attrName + "'"));
+                } else if (object.isSet()) {
+                    throwException(ExceptionBuilder::runtimeError("Set has no attribute '" + attrName + "'"));
+                } else if (object.isFunction()) {
+                    uint32_t funcId = object.asIndex();
+                    auto funcShared = getFunctionById(funcId);
+                    Function* funcObj = funcShared.get();
+                    if (!funcObj) {
+                        throwException(ExceptionBuilder::runtimeError("Invalid function reference"));
+                        break;
+                    }
+
+                    if (attrName == "__doc__") {
+                        if (!value.isString()) {
+                            throwException(ExceptionBuilder::typeError("string", pythonTypeName(value)));
+                            break;
+                        }
+                        funcObj->setDocstring(value.asString());
+                        push(value);
+                    } else if (attrName == "__name__") {
+                        throwException(ExceptionBuilder::runtimeError("Function attribute '__name__' is read-only"));
+                    } else {
+                        throwException(ExceptionBuilder::runtimeError("Function has no attribute '" + attrName + "'"));
                     }
                 } else {
                     throwException(ExceptionBuilder::runtimeError("Object has no attribute '" + attrName + "'"));
@@ -1321,6 +1532,31 @@ void rglite::VM::registerNativeFunction(const std::string& name, rglite::NativeF
     globals_[name] = Value(name, true);
 }
 
+// Expose variable name mapping for snapshot/restore around imports
+std::unordered_map<uint32_t, std::string> rglite::VM::getVariableNameMap() const {
+    return variableNames_;
+}
+
+void rglite::VM::setVariableNameMap(const std::unordered_map<uint32_t, std::string>& mapping) {
+    variableNames_ = mapping;
+}
+
+// Register a user-defined function in the VM-wide registry
+uint32_t rglite::VM::registerFunction(std::shared_ptr<rglite::Function> function) {
+    uint32_t id = nextFunctionId_++;
+    functionRegistry_[id] = std::move(function);
+    return id;
+}
+
+// Lookup a user-defined function by VM-wide id
+std::shared_ptr<rglite::Function> rglite::VM::getFunctionById(uint32_t id) const {
+    auto it = functionRegistry_.find(id);
+    if (it != functionRegistry_.end()) {
+        return it->second;
+    }
+    return nullptr;
+}
+
 // Report a runtime error
 void rglite::VM::runtimeError(const std::string& message) {
     // Use the current exception's toString method to display full call stack
@@ -1407,6 +1643,11 @@ void rglite::VM::clearException() {
 // Set variable name mapping for error reporting
 void rglite::VM::setVariableName(uint32_t index, const std::string& name) {
     variableNames_[index] = name;
+}
+
+void rglite::VM::setDebugLogging(bool enabled) {
+    // Do not override environment-based enablement; only enable if requested
+    debugLogging_ = enabled || debugLogging_;
 }
 
 // Push an exception handler onto the handler stack
@@ -1697,6 +1938,34 @@ const rglite::CallFrame* rglite::VM::getCurrentFrame() const {
         return nullptr;
     }
     return &frames_.back();
+}
+
+// ---- Globals helpers for builtins ----
+std::vector<std::string> VM::getGlobalKeys() const {
+    std::vector<std::string> keys;
+    keys.reserve(globals_.size());
+    for (const auto& kv : globals_) {
+        keys.push_back(kv.first);
+    }
+    return keys;
+}
+
+bool VM::hasGlobal(const std::string& name) const {
+    return globals_.find(name) != globals_.end();
+}
+
+Value VM::getGlobal(const std::string& name) const {
+    auto it = globals_.find(name);
+    if (it != globals_.end()) return it->second;
+    return Value();
+}
+
+void VM::setGlobal(const std::string& name, const Value& value) {
+    globals_[name] = value;
+}
+
+void VM::eraseGlobal(const std::string& name) {
+    globals_.erase(name);
 }
 
 } // namespace rglite

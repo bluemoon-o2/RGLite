@@ -195,6 +195,8 @@ private:
     void analyzeWhileStmt(WhileStmt* stmt);
     void analyzeForStmt(ForStmt* stmt);
     void analyzeReturnStmt(ReturnStmt* stmt);
+    void analyzeImportStmt(ImportStmt* stmt);
+    void analyzeFromImportStmt(FromImportStmt* stmt);
     
     // Expression analysis
     Type analyzeExpression(const std::unique_ptr<Expr>& expr);
@@ -220,6 +222,9 @@ private:
     bool inFunction_ = false;
     std::string currentFunction_;
     std::stack<std::pair<bool, std::string>> functionStack_;
+
+    // Track if a wildcard import was used; skip undefined-variable errors in that case
+    bool hasImportAll_ = false;
 
     // Source context for diagnostics
     std::string source_;

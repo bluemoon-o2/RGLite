@@ -11,11 +11,13 @@
 #include "SetValue.h"
 #include <memory>
 #include <variant>
+#include <functional>
 
 namespace rglite {
 
 // Forward declaration
 class MemoryManager;
+class VM;
 
 // Iterator types
 enum class IteratorType : uint8_t {
@@ -24,12 +26,20 @@ enum class IteratorType : uint8_t {
     DICT_VALUE_ITERATOR,
     DICT_ITEM_ITERATOR,
     TUPLE_ITERATOR,
-    SET_ITERATOR
+    SET_ITERATOR,
+    STRING_ITERATOR,
+    ENUMERATE_ITERATOR,
+    ZIP_ITERATOR,
+    MAP_ITERATOR,
+    FILTER_ITERATOR
 };
 
 // Iterator class for containers
 class Iterator {
 public:
+    // Constructor for wrapper iterators needs VM
+    explicit Iterator(VM* vm) : vm_(vm) {}
+
     // Constructor for list iterator
     Iterator(ListValue* list, size_t startIndex = 0) 
         : type_(IteratorType::LIST_ITERATOR), currentIndex_(startIndex) {
@@ -58,6 +68,26 @@ public:
         : type_(IteratorType::SET_ITERATOR), currentIndex_(startIndex) {
         set_ = set;
     }
+
+    // Constructor for string iterator (iterates characters)
+    Iterator(const std::string& str, size_t startIndex = 0)
+        : type_(IteratorType::STRING_ITERATOR), currentIndex_(startIndex), string_(str) {}
+
+    // Constructor for enumerate wrapper iterator
+    Iterator(VM* vm, Iterator* base, int64_t startIndex)
+        : type_(IteratorType::ENUMERATE_ITERATOR), currentIndex_(0), vm_(vm), enumerateBase_(base), enumerateIndex_(startIndex) {}
+
+    // Constructor for zip wrapper iterator
+    Iterator(VM* vm, const std::vector<Iterator*>& bases)
+        : type_(IteratorType::ZIP_ITERATOR), currentIndex_(0), vm_(vm), zipBases_(bases) {}
+
+    // Constructor for map wrapper iterator
+    Iterator(VM* vm, Iterator* base, std::function<Value(const Value&)> mapFunc)
+        : type_(IteratorType::MAP_ITERATOR), currentIndex_(0), vm_(vm), mapBase_(base), mapFunc_(std::move(mapFunc)) {}
+
+    // Constructor for filter wrapper iterator
+    Iterator(VM* vm, Iterator* base, std::function<bool(const Value&)> predFunc)
+        : type_(IteratorType::FILTER_ITERATOR), currentIndex_(0), vm_(vm), filterBase_(base), filterPred_(std::move(predFunc)) {}
     
     // Check if iterator has more elements
     bool hasNext() const {
@@ -71,6 +101,32 @@ public:
             return tuple_ && currentIndex_ < tuple_->size();
         } else if (type_ == IteratorType::SET_ITERATOR) {
             return set_ && currentIndex_ < set_->size();
+        } else if (type_ == IteratorType::STRING_ITERATOR) {
+            return currentIndex_ < string_.size();
+        } else if (type_ == IteratorType::ENUMERATE_ITERATOR) {
+            return enumerateBase_ && enumerateBase_->hasNext();
+        } else if (type_ == IteratorType::ZIP_ITERATOR) {
+            if (zipBases_.empty()) return false;
+            for (auto* it : zipBases_) { if (!it || !it->hasNext()) return false; }
+            return true;
+        } else if (type_ == IteratorType::MAP_ITERATOR) {
+            return mapBase_ && mapBase_->hasNext();
+        } else if (type_ == IteratorType::FILTER_ITERATOR) {
+            // Need to check if any further element satisfies predicate; but for hasNext we do a lookahead.
+            // Implement simple lookahead buffering: if filterHasBuffered_ then true; else advance until match or exhaustion.
+            if (!filterBase_) return false;
+            if (filterHasBuffered_) return true;
+            // mutable cast to update buffer in const method
+            auto* self = const_cast<Iterator*>(this);
+            while (self->filterBase_->hasNext()) {
+                Value candidate = self->filterBase_->next();
+                if (self->filterPred_ && self->filterPred_(candidate)) {
+                    self->filterBuffered_ = candidate;
+                    self->filterHasBuffered_ = true;
+                    return true;
+                }
+            }
+            return false;
         }
         return false;
     }
@@ -126,6 +182,41 @@ public:
             auto items = set_->getItems();
             Value result = items[currentIndex_++];
             return result;
+        } else if (type_ == IteratorType::STRING_ITERATOR) {
+            // Return one-character string values
+            char ch = string_[currentIndex_++];
+            std::string s(1, ch);
+            return Value(s);
+        } else if (type_ == IteratorType::ENUMERATE_ITERATOR) {
+            // Build [index, value]
+            Value v = enumerateBase_->next();
+            Value idxVal(static_cast<int64_t>(enumerateIndex_++));
+            std::vector<Value> pair{idxVal, v};
+            size_t listIdx = vmListCreate(pair);
+            return Value(static_cast<uint32_t>(listIdx), ValueType::LIST);
+        } else if (type_ == IteratorType::ZIP_ITERATOR) {
+            std::vector<Value> group;
+            group.reserve(zipBases_.size());
+            for (auto* it : zipBases_) { group.emplace_back(it->next()); }
+            size_t listIdx = vmListCreate(group);
+            return Value(static_cast<uint32_t>(listIdx), ValueType::LIST);
+        } else if (type_ == IteratorType::MAP_ITERATOR) {
+            Value v = mapBase_->next();
+            if (mapFunc_) return mapFunc_(v);
+            return v;
+        } else if (type_ == IteratorType::FILTER_ITERATOR) {
+            if (filterHasBuffered_) {
+                filterHasBuffered_ = false;
+                return filterBuffered_;
+            }
+            // Advance until predicate passes
+            while (filterBase_->hasNext()) {
+                Value candidate = filterBase_->next();
+                if (!filterPred_ || filterPred_(candidate)) {
+                    return candidate;
+                }
+            }
+            return Value();
         }
         return Value(); // Default case
     }
@@ -139,10 +230,32 @@ public:
 private:
     IteratorType type_;
     size_t currentIndex_;
+    VM* vm_ = nullptr;
     ListValue* list_ = nullptr;
     DictValue* dict_ = nullptr;
     TupleValue* tuple_ = nullptr;
     SetValue* set_ = nullptr;
+    std::string string_;
+
+    // Enumerate wrapper state
+    Iterator* enumerateBase_ = nullptr;
+    int64_t enumerateIndex_ = 0;
+
+    // Zip wrapper state
+    std::vector<Iterator*> zipBases_;
+
+    // Map wrapper state
+    Iterator* mapBase_ = nullptr;
+    std::function<Value(const Value&)> mapFunc_;
+
+    // Filter wrapper state (lookahead buffer)
+    Iterator* filterBase_ = nullptr;
+    std::function<bool(const Value&)> filterPred_;
+    Value filterBuffered_;
+    bool filterHasBuffered_ = false;
+
+    // Helper: create list via VM ListStorage
+    size_t vmListCreate(const std::vector<Value>& items) const;
 };
 
 // Iterator storage for the VM
@@ -185,6 +298,36 @@ public:
     // Create a new set iterator
     size_t createSetIterator(SetValue* set, size_t startIndex = 0) {
         iterators_.push_back(std::make_unique<Iterator>(set, startIndex));
+        return iterators_.size() - 1;
+    }
+
+    // Create a new string iterator
+    size_t createStringIterator(const std::string& str, size_t startIndex = 0) {
+        iterators_.push_back(std::make_unique<Iterator>(str, startIndex));
+        return iterators_.size() - 1;
+    }
+
+    // Create enumerate wrapper iterator
+    size_t createEnumerateIterator(VM* vm, Iterator* base, int64_t startIndex = 0) {
+        iterators_.push_back(std::make_unique<Iterator>(vm, base, startIndex));
+        return iterators_.size() - 1;
+    }
+
+    // Create zip wrapper iterator
+    size_t createZipIterator(VM* vm, const std::vector<Iterator*>& bases) {
+        iterators_.push_back(std::make_unique<Iterator>(vm, bases));
+        return iterators_.size() - 1;
+    }
+
+    // Create map wrapper iterator
+    size_t createMapIterator(VM* vm, Iterator* base, std::function<Value(const Value&)> func) {
+        iterators_.push_back(std::make_unique<Iterator>(vm, base, std::move(func)));
+        return iterators_.size() - 1;
+    }
+
+    // Create filter wrapper iterator
+    size_t createFilterIterator(VM* vm, Iterator* base, std::function<bool(const Value&)> pred) {
+        iterators_.push_back(std::make_unique<Iterator>(vm, base, std::move(pred)));
         return iterators_.size() - 1;
     }
     

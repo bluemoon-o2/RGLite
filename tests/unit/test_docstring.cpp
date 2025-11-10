@@ -46,5 +46,26 @@ print(x)
     EXPECT_TRUE(result);
 }
 
+TEST_F(DocstringTestFixture, ModuleBuiltinsAccessible_NoDocstring, DocstringTestFixture) {
+    std::string source = R"(
+print(__name__)
+print(__file__)
+print(isnil(__doc__))
+)";
+    bool result = (compiler->execute(source) == 0);
+    EXPECT_TRUE(result);
+}
+
+TEST_F(DocstringTestFixture, ModuleBuiltinsAccessible_WithDocstring, DocstringTestFixture) {
+    std::string source = R"(
+"""Docstring present"""
+print(__name__)
+print(__file__)
+print(__doc__.length)
+)";
+    bool result = (compiler->execute(source) == 0);
+    EXPECT_TRUE(result);
+}
+
 // Main test runner
 RUN_ALL_TESTS()

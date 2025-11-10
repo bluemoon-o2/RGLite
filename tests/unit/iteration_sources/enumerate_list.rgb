@@ -1,0 +1,4 @@
+it = enumerate([10, 20])
+_ = next(it)
+pair = next(it)
+result = pair[0]

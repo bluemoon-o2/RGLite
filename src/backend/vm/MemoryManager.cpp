@@ -203,8 +203,4 @@ void MemoryManager::clearMarks() {
     markedObjects_.clear();
 }
 
-void MemoryManager::freeUnmarkedObjects() {
-    // This is handled in sweepPhase
-}
-
 } // namespace RGLite

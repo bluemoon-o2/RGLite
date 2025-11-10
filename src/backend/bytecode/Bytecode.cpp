@@ -56,6 +56,9 @@ std::string opCodeToString(OpCode opcode) {
         case OpCode::HAS_NEXT: return "HAS_NEXT";
         case OpCode::GET_NEXT: return "GET_NEXT";
         
+        case OpCode::GET_ATTR: return "GET_ATTR";
+        case OpCode::SET_ATTR: return "SET_ATTR";
+        
         case OpCode::TRY: return "TRY";
         case OpCode::CATCH: return "CATCH";
         case OpCode::END_TRY: return "END_TRY";

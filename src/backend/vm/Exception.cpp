@@ -133,7 +133,7 @@ Exception ExceptionBuilder::indexError(size_t index, size_t size) {
 }
 
 Exception ExceptionBuilder::keyError(const std::string& key) {
-    return Exception(ExceptionType::KEY_ERROR, "Key not found: " + key);
+    return Exception(ExceptionType::KEY_ERROR, std::string("'") + key + "'");
 }
 
 Exception ExceptionBuilder::zeroDivision() {
@@ -142,7 +142,7 @@ Exception ExceptionBuilder::zeroDivision() {
 }
 
 Exception ExceptionBuilder::nameError(const std::string& name) {
-    return Exception(ExceptionType::NAME_ERROR, "Name not found: " + name);
+    return Exception(ExceptionType::NAME_ERROR, std::string("name '") + name + "' is not defined");
 }
 
 Exception ExceptionBuilder::attributeError(const std::string& attribute, const std::string& object) {

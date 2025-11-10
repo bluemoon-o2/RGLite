@@ -69,6 +69,7 @@ enum class OpCode : uint8_t {
     
     // Object operations
     GET_ATTR,      // Get attribute from object
+    SET_ATTR,      // Set attribute on object
     
     // Exception handling operations
     TRY,           // Start a try block

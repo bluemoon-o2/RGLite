@@ -41,7 +41,9 @@ enum class StmtType {
     WHILE_STMT,
     FOR_STMT,
     FUNC_DECL,
-    RETURN_STMT
+    RETURN_STMT,
+    IMPORT_STMT,
+    FROM_IMPORT_STMT
 };
 
 /**
@@ -368,6 +370,45 @@ public:
     StmtType getType() const override { return StmtType::RETURN_STMT; }
 };
 
+// Import statements
+class ImportStmt : public Stmt {
+public:
+    struct Item {
+        std::string module;   // dotted module name
+        std::string alias;    // empty if no alias
+    };
+    std::vector<Item> items;
+    SourceLocation location;
+
+    ImportStmt(std::vector<Item> itms, const SourceLocation& loc)
+        : items(std::move(itms)), location(loc) {}
+
+    void accept(ASTVisitor& visitor) override;
+    SourceLocation getLocation() const override { return location; }
+    std::string toString() const override;
+    StmtType getType() const override { return StmtType::IMPORT_STMT; }
+};
+
+class FromImportStmt : public Stmt {
+public:
+    struct NameItem {
+        std::string name;     // imported name
+        std::string alias;    // empty if no alias
+    };
+    std::string module;       // dotted module name
+    bool importAll;           // true if "*"
+    std::vector<NameItem> names; // empty when importAll is true
+    SourceLocation location;
+
+    FromImportStmt(const std::string& mod, bool all, std::vector<NameItem> nms, const SourceLocation& loc)
+        : module(mod), importAll(all), names(std::move(nms)), location(loc) {}
+
+    void accept(ASTVisitor& visitor) override;
+    SourceLocation getLocation() const override { return location; }
+    std::string toString() const override;
+    StmtType getType() const override { return StmtType::FROM_IMPORT_STMT; }
+};
+
 /**
  * @brief Visitor interface for AST traversal
  */
@@ -396,6 +437,8 @@ public:
     virtual void visitForStmt(ForStmt& stmt) = 0;
     virtual void visitFunctionDeclStmt(FunctionDeclStmt& stmt) = 0;
     virtual void visitReturnStmt(ReturnStmt& stmt) = 0;
+    virtual void visitImportStmt(ImportStmt& stmt) = 0;
+    virtual void visitFromImportStmt(FromImportStmt& stmt) = 0;
 };
 
 } // namespace rglite

@@ -1,3 +1,5 @@
+"""selection_sort example"""
+
 def selection_sort(arr):
     temp = []
     i = 0
@@ -27,6 +29,8 @@ def selection_sort(arr):
         n = len(temp)
     return result
 
-data = [5, 2, 8, 1, 3, 7, 4, 6]
-sorted_data = selection_sort(data)
-print(sorted_data)
+if __name__ == "__main__":
+    data = [5, 2, 8, 1, 3, 7, 4, 6]
+    sorted_data = selection_sort(data)
+    print(sorted_data)
+    print(__doc__)

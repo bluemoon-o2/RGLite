@@ -3,9 +3,12 @@
 
 #include "CodeGenerator.h"
 #include "VM.h"
+#include <cstdlib>
+#include <iostream>
 #include <sstream>
 #include <limits>
 #include <unordered_set>
+#include <algorithm>
 
 namespace rglite {
 
@@ -29,6 +32,12 @@ std::shared_ptr<Function> CodeGenerator::generate(const std::shared_ptr<ASTNode>
     nextVariableIndex_ = 0;
     scopeDepth_ = 0;
     errors_.clear();
+
+    // Pre-register special module globals for reliable name mapping
+    // Ensures identifiers like '__doc__' resolve to proper names even before first use
+    createVariable("__name__");
+    createVariable("__file__");
+    createVariable("__doc__");
     
     // Generate bytecode for the AST
     if (ast) {
@@ -54,6 +63,21 @@ std::shared_ptr<Function> CodeGenerator::getFunctionByIndex(size_t index) const 
         return functions_[index];
     }
     return nullptr;
+}
+
+// Export variable name table for serialization
+std::vector<std::pair<uint32_t, std::string>> CodeGenerator::getVariableNameTable() const {
+    std::vector<std::pair<uint32_t, std::string>> table;
+    table.reserve(variables_.size());
+    for (const auto& kv : variables_) {
+        const auto& name = kv.first;
+        const auto& info = kv.second;
+        // Cast index to uint32_t for stable serialization format
+        table.emplace_back(static_cast<uint32_t>(info.index), name);
+    }
+    // Sort by index to make table deterministic
+    std::sort(table.begin(), table.end(), [](const auto& a, const auto& b){ return a.first < b.first; });
+    return table;
 }
 
 // Expression visitors
@@ -112,6 +136,13 @@ void CodeGenerator::visitIdentifierExpr(IdentifierExpr& expr) {
     } else {
         // For regular variables, emit a LOAD_VAR instruction with the variable index
         size_t varIndex = getVariableIndex(expr.name);
+        // Debug: track '__doc__' identifier resolution
+        if (expr.name == "__doc__") {
+            const bool dbg = (std::getenv("RGLITE_DEBUG") != nullptr);
+            if (dbg) {
+                std::cerr << "[debug] codegen: identifier '__doc__' varIndex=" << varIndex << std::endl;
+            }
+        }
         // Check if varIndex fits in uint32_t to avoid truncation
         if (varIndex > std::numeric_limits<uint32_t>::max()) {
             error("Variable index too large", expr.location);
@@ -126,11 +157,11 @@ void CodeGenerator::visitBinaryExpr(BinaryExpr& expr) {
     
     // Check if this is an assignment operation
     if (expr.op.type == TokenType::OP_ASSIGN) {
-        // For assignment, evaluate the right side first
-        expr.right->accept(*this);
-        
-        // Check if left side is an identifier
+        // Identifier assignment: evaluate right first, then store
         if (auto identifier = dynamic_cast<IdentifierExpr*>(expr.left.get())) {
+            // Evaluate the right-hand side to get the value
+            expr.right->accept(*this);
+            
             // Get or create the variable
             size_t varIndex = getVariableIndex(identifier->name);
             
@@ -143,12 +174,43 @@ void CodeGenerator::visitBinaryExpr(BinaryExpr& expr) {
             // Emit a STORE_VAR instruction to store the value in the variable
             emitInstruction(OpCode::STORE_VAR, static_cast<uint32_t>(varIndex));
             
-            // Leave the value on the stack (Python-style assignment returns the assigned value)
-            return;
-        } else {
-            error("Invalid assignment target", expr.op.location);
+            // Leave the value on the stack
             return;
         }
+        
+        // Member attribute assignment: object, attribute, then value
+        if (auto member = dynamic_cast<MemberAccessExpr*>(expr.left.get())) {
+            // Generate object
+            member->object->accept(*this);
+            // Push attribute name constant
+            size_t memberIndex = emitConstant(Value(member->member));
+            if (memberIndex > std::numeric_limits<uint32_t>::max()) {
+                error("Member name constant index too large", expr.op.location);
+                return;
+            }
+            emitInstruction(OpCode::LOAD_CONST, static_cast<uint32_t>(memberIndex));
+            // Generate value
+            expr.right->accept(*this);
+            // Set attribute
+            emitInstruction(OpCode::SET_ATTR);
+            return;
+        }
+        
+        // Index assignment: object, index, then value
+        if (auto index = dynamic_cast<IndexAccessExpr*>(expr.left.get())) {
+            // Generate object
+            index->object->accept(*this);
+            // Generate index expression
+            index->index->accept(*this);
+            // Generate value
+            expr.right->accept(*this);
+            // Set item
+            emitInstruction(OpCode::SET_ITEM);
+            return;
+        }
+        
+        error("Invalid assignment target", expr.op.location);
+        return;
     }
     
     // For non-assignment binary operations, generate bytecode for the left operand first
@@ -223,11 +285,27 @@ void CodeGenerator::visitCallExpr(CallExpr& expr) {
         return;
     }
     // If callee is a member access, include the receiver as an implicit first argument
+    // only when calling known container methods (list/dict). Module attribute functions
+    // do NOT take an implicit receiver.
     uint32_t argc = static_cast<uint32_t>(expr.arguments.size());
     if (expr.callee && expr.callee->getType() == ExprType::MEMBER_ACCESS) {
-        // Safe to increment; we already checked size upper bound above for arguments
-        // Member-access calls treat the object as the first argument for native methods
-        argc += 1;
+        auto member = dynamic_cast<MemberAccessExpr*>(expr.callee.get());
+        bool needsImplicitReceiver = false;
+        if (member) {
+            static const std::unordered_set<std::string> dictMethods = {
+                "keys", "values", "items", "update", "get", "pop", "popitem", "setdefault", "copy", "fromkeys", "clear"
+            };
+            static const std::unordered_set<std::string> listMethods = {
+                "append", "remove", "extend", "insert", "pop", "clear", "sort", "reverse", "count", "index", "copy"
+            };
+            // For known container methods, GET_ATTR pushes (function, receiver), so argc must include receiver
+            if (dictMethods.count(member->member) || listMethods.count(member->member)) {
+                needsImplicitReceiver = true;
+            }
+        }
+        if (needsImplicitReceiver) {
+            argc += 1;
+        }
     }
     emitInstruction(OpCode::CALL, argc);
 }
@@ -351,6 +429,49 @@ void CodeGenerator::visitIndexAccessExpr(IndexAccessExpr& expr) {
 
 // Statement visitors
 void CodeGenerator::visitExprStmt(ExprStmt& stmt) {
+    // Special-case: module-level docstring when the root is a single ExprStmt.
+    // Detect only for the very first statement of __main__ at top-level.
+    bool handledModuleDocstring = false;
+    if (currentFunction_ && currentFunction_->getName() == "__main__" && scopeDepth_ == 0 && currentChunk_ && currentChunk_->size() == 0) {
+        if (stmt.expression) {
+            if (auto litExpr = dynamic_cast<LiteralExpr*>(stmt.expression.get())) {
+                if (litExpr->token.type == TokenType::STRING) {
+                    const bool dbg = (std::getenv("RGLITE_DEBUG") != nullptr);
+                    if (dbg) {
+                        std::cerr << "[debug] codegen: module docstring detected (expr root)" << std::endl;
+                    }
+                    // Create and store module docstring in global __doc__ variable
+                    size_t constIndex = emitConstant(Value(litExpr->token.lexeme));
+                    if (constIndex > std::numeric_limits<uint32_t>::max()) {
+                        error("Docstring constant index too large");
+                        return;
+                    }
+                    emitInstruction(OpCode::LOAD_CONST, static_cast<uint32_t>(constIndex));
+                    // Use getVariableIndex to avoid re-creating a new index if '__doc__' already exists
+                    size_t docVarIndex = getVariableIndex("__doc__");
+                    if (dbg) {
+                        std::cerr << "[debug] codegen: getVariableIndex('__doc__') idx=" << docVarIndex << std::endl;
+                    }
+                    if (docVarIndex > std::numeric_limits<uint32_t>::max()) {
+                        error("Variable index too large");
+                        return;
+                    }
+                    emitInstruction(OpCode::STORE_VAR, static_cast<uint32_t>(docVarIndex));
+                    // Discard the value from stack
+                    emitInstruction(OpCode::POP);
+                    // Also set the docstring on __main__ function object
+                    currentFunction_->setDocstring(litExpr->token.lexeme);
+                    if (dbg) {
+                        std::cerr << "[debug] codegen: set __main__.__doc__ length=" << litExpr->token.lexeme.size() << std::endl;
+                    }
+                    handledModuleDocstring = true;
+                }
+            }
+        }
+    }
+    if (handledModuleDocstring) {
+        return;
+    }
     // Generate bytecode for the expression
     stmt.expression->accept(*this);
     
@@ -367,6 +488,10 @@ void CodeGenerator::visitBlockStmt(BlockStmt& stmt) {
                 if (exprStmt->expression) {
                     if (auto litExpr = dynamic_cast<LiteralExpr*>(exprStmt->expression.get())) {
                         if (litExpr->token.type == TokenType::STRING) {
+                            const bool dbg = (std::getenv("RGLITE_DEBUG") != nullptr);
+                            if (dbg) {
+                                std::cerr << "[debug] codegen: module docstring detected" << std::endl;
+                            }
                             // Create and store module docstring in global __doc__ variable
                             size_t constIndex = emitConstant(Value(litExpr->token.lexeme));
                             if (constIndex > std::numeric_limits<uint32_t>::max()) {
@@ -374,7 +499,11 @@ void CodeGenerator::visitBlockStmt(BlockStmt& stmt) {
                                 return;
                             }
                             emitInstruction(OpCode::LOAD_CONST, static_cast<uint32_t>(constIndex));
-                            size_t docVarIndex = createVariable("__doc__");
+                            // Use getVariableIndex to avoid re-creating a new index if '__doc__' already exists
+                            size_t docVarIndex = getVariableIndex("__doc__");
+                            if (dbg) {
+                                std::cerr << "[debug] codegen: getVariableIndex('__doc__') idx=" << docVarIndex << std::endl;
+                            }
                             if (docVarIndex > std::numeric_limits<uint32_t>::max()) {
                                 error("Variable index too large", stmt.location);
                                 return;
@@ -384,6 +513,9 @@ void CodeGenerator::visitBlockStmt(BlockStmt& stmt) {
                             emitInstruction(OpCode::POP);
                             // Also set the docstring on __main__ function object
                             currentFunction_->setDocstring(litExpr->token.lexeme);
+                            if (dbg) {
+                                std::cerr << "[debug] codegen: set __main__.__doc__ length=" << litExpr->token.lexeme.size() << std::endl;
+                            }
                             // Skip this first statement when generating the rest of the block
                             startIndex = 1;
                         }
@@ -630,8 +762,13 @@ void CodeGenerator::visitFunctionDeclStmt(FunctionDeclStmt& stmt) {
     currentFunction_ = previousFunction;
     currentChunk_ = previousChunk;
     
-    // Emit a constant for the function index (store the actual function index)
-    size_t constIndex = emitConstant(Value(static_cast<uint32_t>(functionIndex), ValueType::FUNCTION));
+    // Emit a constant for the function id (VM-wide if VM present)
+    uint32_t functionIdOrIndex = static_cast<uint32_t>(functionIndex);
+    if (vm_) {
+        // Register into VM to support cross-module calls
+        functionIdOrIndex = vm_->registerFunction(function);
+    }
+    size_t constIndex = emitConstant(Value(functionIdOrIndex, ValueType::FUNCTION));
     
     // Create a variable for the function name
     size_t varIndex = createVariable(stmt.name);
@@ -674,6 +811,110 @@ void CodeGenerator::visitReturnStmt(ReturnStmt& stmt) {
     emitInstruction(OpCode::RETURN);
 }
 
+void CodeGenerator::visitImportStmt(ImportStmt& stmt) {
+    // For each module: push native __import__, push module name, CALL 1, STORE_VAR bound name
+    for (const auto& item : stmt.items) {
+        // Load native __import__
+        size_t importFnIdx = emitConstant(Value("__import__", true));
+        if (importFnIdx > std::numeric_limits<uint32_t>::max()) {
+            error("Constant index too large for __import__", stmt.location);
+            return;
+        }
+        emitInstruction(OpCode::LOAD_CONST, static_cast<uint32_t>(importFnIdx));
+
+        // Push module name
+        size_t moduleIdx = emitConstant(Value(item.module));
+        if (moduleIdx > std::numeric_limits<uint32_t>::max()) {
+            error("Constant index too large for module name", stmt.location);
+            return;
+        }
+        emitInstruction(OpCode::LOAD_CONST, static_cast<uint32_t>(moduleIdx));
+
+        // Call __import__(module)
+        emitInstruction(OpCode::CALL, 1);
+
+        // If importing a dotted module without alias, bind to top-level package like Python
+        bool hasAlias = !item.alias.empty();
+        bool isDotted = (item.module.find('.') != std::string::npos);
+        if (!hasAlias && isDotted) {
+            // Call __import_bind__(module_dict) where module_dict is on stack
+            size_t bindFnIdx = emitConstant(Value("__import_bind__", true));
+            if (bindFnIdx > std::numeric_limits<uint32_t>::max()) {
+                error("Constant index too large for __import_bind__", stmt.location);
+                return;
+            }
+            // Place function below the single argument, CALL will handle native function below args
+            emitInstruction(OpCode::LOAD_CONST, static_cast<uint32_t>(bindFnIdx));
+            emitInstruction(OpCode::CALL, 1);
+        }
+
+        // Determine bound name: alias if present, else top-level package (first segment)
+        std::string boundName = item.alias.empty() ? std::string(item.module.substr(0, item.module.find('.'))) : item.alias;
+        size_t varIndex = getVariableIndex(boundName);
+        if (varIndex > std::numeric_limits<uint32_t>::max()) {
+            error("Variable index too large", stmt.location);
+            return;
+        }
+        emitInstruction(OpCode::STORE_VAR, static_cast<uint32_t>(varIndex));
+    }
+}
+
+void CodeGenerator::visitFromImportStmt(FromImportStmt& stmt) {
+    // Import module: push __import__, push module, CALL 1 -> module object on stack
+    size_t importFnIdx = emitConstant(Value("__import__", true));
+    if (importFnIdx > std::numeric_limits<uint32_t>::max()) {
+        error("Constant index too large for __import__", stmt.location);
+        return;
+    }
+    emitInstruction(OpCode::LOAD_CONST, static_cast<uint32_t>(importFnIdx));
+
+    size_t moduleIdx = emitConstant(Value(stmt.module));
+    if (moduleIdx > std::numeric_limits<uint32_t>::max()) {
+        error("Constant index too large for module name", stmt.location);
+        return;
+    }
+    emitInstruction(OpCode::LOAD_CONST, static_cast<uint32_t>(moduleIdx));
+    emitInstruction(OpCode::CALL, 1);
+
+    if (stmt.importAll) {
+        // Call __import_all__(module)
+        size_t importAllFnIdx = emitConstant(Value("__import_all__", true));
+        if (importAllFnIdx > std::numeric_limits<uint32_t>::max()) {
+            error("Constant index too large for __import_all__", stmt.location);
+            return;
+        }
+        emitInstruction(OpCode::LOAD_CONST, static_cast<uint32_t>(importAllFnIdx));
+        // module object is already on stack below the function
+        emitInstruction(OpCode::CALL, 1);
+        // drop returned count
+        emitInstruction(OpCode::POP);
+        return;
+    }
+
+    // For each name: duplicate module, load name, GET_ATTR, STORE_VAR alias/name
+    for (const auto& nameItem : stmt.names) {
+        // Duplicate module object on stack for next access
+        emitInstruction(OpCode::DUP);
+        size_t nameIdx = emitConstant(Value(nameItem.name));
+        if (nameIdx > std::numeric_limits<uint32_t>::max()) {
+            error("Constant index too large for import name", stmt.location);
+            return;
+        }
+        emitInstruction(OpCode::LOAD_CONST, static_cast<uint32_t>(nameIdx));
+        emitInstruction(OpCode::GET_ATTR);
+
+        std::string boundName = nameItem.alias.empty() ? nameItem.name : nameItem.alias;
+        size_t varIndex = getVariableIndex(boundName);
+        if (varIndex > std::numeric_limits<uint32_t>::max()) {
+            error("Variable index too large", stmt.location);
+            return;
+        }
+        emitInstruction(OpCode::STORE_VAR, static_cast<uint32_t>(varIndex));
+    }
+
+    // Pop the original module object from stack
+    emitInstruction(OpCode::POP);
+}
 // Private helper methods
 void CodeGenerator::emitInstruction(OpCode opcode, uint32_t operand) {
     if (currentChunk_) {
@@ -731,17 +972,19 @@ bool CodeGenerator::isBuiltinFunction(const std::string& name) {
     // List of builtin functions
     static const std::unordered_set<std::string> builtinFunctions = {
         // I/O and core
-        "print", "len", "any", "all",
+        "print", "len", "any", "all", "range",
         // Type checking
         "type", "isnil", "isboolean", "isinteger", "isfloat", "isnumber", "isstring", "islist", "isdict", "isfunction",
         // Math
         "abs", "min", "max", "sum",
         // Conversion and string
         "int", "str", "substr",
-        // List
-        "append", "remove", "extend", "insert", "pop", "clear", "sort", "reverse", "sorted", "reversed", "count", "index", "list_copy",
-        // Dict
-        "keys", "values", "contains", "update", "get", "copy", "fromkeys", "items", "dict_pop", "popitem", "setdefault"
+        // Iteration helpers (global functions only)
+        "sorted", "reversed", "iter", "next", "enumerate", "zip", "map", "filter",
+        // NOTE: List/Dict methods are not global functions.
+        // Use Python-style method calls (e.g., list.append, dict.keys).
+        // Import
+        "__import__", "__import_all__", "__import_bind__"
     };
     
     return builtinFunctions.find(name) != builtinFunctions.end();

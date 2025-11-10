@@ -1,0 +1,6 @@
+__doc__ = "star noall module"
+
+a = 1
+c = 2
+_hidden = 3
+

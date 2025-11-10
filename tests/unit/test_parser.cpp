@@ -94,6 +94,19 @@ TEST_F(ParserSuite, VariableDeclarationWithExpression, ParserTestFixture) {
     EXPECT_FALSE(parser->hasErrors());
 }
 
+// Test suite for member and index assignment parsing
+TEST_F(ParserSuite, MemberAssignment, ParserTestFixture) {
+    parseAndValidate("d.attr = 1\n",
+        "ExprStmt(BinaryExpr(MemberAccessExpr(IdentifierExpr(d).attr) = LiteralExpr(1)))");
+    EXPECT_FALSE(parser->hasErrors());
+}
+
+TEST_F(ParserSuite, IndexAssignment, ParserTestFixture) {
+    parseAndValidate("a[0] = 42\n",
+        "ExprStmt(BinaryExpr(IndexAccessExpr(IdentifierExpr(a)[LiteralExpr(0)]) = LiteralExpr(42)))");
+    EXPECT_FALSE(parser->hasErrors());
+}
+
 // Test suite for function call parsing
 TEST_F(ParserSuite, FunctionCall, ParserTestFixture) {
     parseAndValidate("print(\"hello\")\n", 
@@ -217,6 +230,37 @@ TEST_F(ParserSuite, NotInOperatorErrorMissingRightOperand, ParserTestFixture) {
     
     EXPECT_NE(stmt, nullptr);
     EXPECT_TRUE(parser->hasErrors());
+}
+
+// Test suite for import statements
+TEST_F(ParserSuite, ImportStatement, ParserTestFixture) {
+    parseAndValidate("import math\n", "ImportStmt([math])");
+    EXPECT_FALSE(parser->hasErrors());
+}
+
+TEST_F(ParserSuite, ImportStatementWithAlias, ParserTestFixture) {
+    parseAndValidate("import math as m\n", "ImportStmt([math as m])");
+    EXPECT_FALSE(parser->hasErrors());
+}
+
+TEST_F(ParserSuite, ImportMultipleModules, ParserTestFixture) {
+    parseAndValidate("import os, sys as s\n", "ImportStmt([os, sys as s])");
+    EXPECT_FALSE(parser->hasErrors());
+}
+
+TEST_F(ParserSuite, FromImportStatement, ParserTestFixture) {
+    parseAndValidate("from math import sqrt\n", "FromImportStmt(module: math, names: [sqrt])");
+    EXPECT_FALSE(parser->hasErrors());
+}
+
+TEST_F(ParserSuite, FromImportStatementWithAliasList, ParserTestFixture) {
+    parseAndValidate("from math import sqrt as s, cos\n", "FromImportStmt(module: math, names: [sqrt as s, cos])");
+    EXPECT_FALSE(parser->hasErrors());
+}
+
+TEST_F(ParserSuite, FromImportStar, ParserTestFixture) {
+    parseAndValidate("from math import *\n", "FromImportStmt(module: math, names: *)");
+    EXPECT_FALSE(parser->hasErrors());
 }
 
 // Main function using the new test framework

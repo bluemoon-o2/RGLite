@@ -4,8 +4,9 @@
     </p>
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/bluemoon-o2/RGLite)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)]()
+[![License](https://img.shields.io/badge/license-Apache%202.0-purple.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-orange.svg)]()
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/bluemoon-o2/RGLite)
 
 [![Build and Test](https://github.com/bluemoon-o2/RGLite/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/bluemoon-o2/RGLite/actions/workflows/build-and-test.yml)
 [![Code Quality](https://github.com/bluemoon-o2/RGLite/actions/workflows/code-quality.yml/badge.svg)](https://github.com/bluemoon-o2/RGLite/actions/workflows/code-quality.yml)
@@ -27,6 +28,12 @@
   - Designed for programming education with extremely simple and easy-to-understand syntax
   - Supports rapid script development to reduce coding costs
 - **Environment Requirements**: Cross-platform (Windows/macOS/Linux), requires RGLite interpreter (approximately 5MB lightweight package)
+
+<div align="center">
+    <p>
+        <img src="./docs/img/banner%20(6).png" alt="RGLite Banner">
+    </p>
+</div>
 
 ## Quick Start
 
@@ -213,3 +220,9 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 ## Acknowledgments
 
 Thanks to all developers who have contributed to the RGLite project!
+
+<div align="center">
+    <p>
+        <img src="./docs/img/banner%20(9).png" alt="RGLite Banner">
+    </p>
+</div>

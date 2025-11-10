@@ -219,6 +219,144 @@ TEST(Builtins, ExtendTypeError) {
     EXPECT_TRUE(vm.hasException());
 }
 
+// range(stop) -> [0..stop-1]
+TEST(Builtins, RangeStop) {
+    Chunk chunk;
+
+    size_t five = chunk.addConstant(Value(static_cast<int64_t>(5)));
+    size_t idx4 = chunk.addConstant(Value(static_cast<int64_t>(4)));
+    size_t fRange = addNative(chunk, "range");
+
+    // r = range(5)
+    chunk.addInstruction(Instruction(OpCode::LOAD_CONST, static_cast<uint32_t>(five)));
+    chunk.addInstruction(Instruction(OpCode::LOAD_CONST, static_cast<uint32_t>(fRange)));
+    chunk.addInstruction(Instruction(OpCode::CALL, static_cast<uint32_t>(1)));
+
+    // Assert: r[4] == 4
+    chunk.addInstruction(Instruction(OpCode::DUP));
+    chunk.addInstruction(Instruction(OpCode::LOAD_CONST, static_cast<uint32_t>(idx4)));
+    chunk.addInstruction(Instruction(OpCode::GET_ITEM));
+    chunk.addInstruction(Instruction(OpCode::HALT));
+
+    VM vm;
+    bool ok = vm.interpret(chunk);
+    EXPECT_TRUE(ok);
+    Value top = vm.peek();
+    EXPECT_TRUE(top.isInteger());
+    EXPECT_EQ(4, top.asInteger());
+}
+
+// range(start, stop) -> starts at start
+TEST(Builtins, RangeStartStop) {
+    Chunk chunk;
+
+    size_t one = chunk.addConstant(Value(static_cast<int64_t>(1)));
+    size_t five = chunk.addConstant(Value(static_cast<int64_t>(5)));
+    size_t idx0 = chunk.addConstant(Value(static_cast<int64_t>(0)));
+    size_t fRange = addNative(chunk, "range");
+
+    // r = range(1, 5)
+    chunk.addInstruction(Instruction(OpCode::LOAD_CONST, static_cast<uint32_t>(one)));
+    chunk.addInstruction(Instruction(OpCode::LOAD_CONST, static_cast<uint32_t>(five)));
+    chunk.addInstruction(Instruction(OpCode::LOAD_CONST, static_cast<uint32_t>(fRange)));
+    chunk.addInstruction(Instruction(OpCode::CALL, static_cast<uint32_t>(2)));
+
+    // Assert: r[0] == 1
+    chunk.addInstruction(Instruction(OpCode::LOAD_CONST, static_cast<uint32_t>(idx0)));
+    chunk.addInstruction(Instruction(OpCode::GET_ITEM));
+    chunk.addInstruction(Instruction(OpCode::HALT));
+
+    VM vm;
+    bool ok = vm.interpret(chunk);
+    EXPECT_TRUE(ok);
+    Value top = vm.peek();
+    EXPECT_TRUE(top.isInteger());
+    EXPECT_EQ(1, top.asInteger());
+}
+
+// range(start, stop, step) -> positive step
+TEST(Builtins, RangeStartStopStepPos) {
+    Chunk chunk;
+
+    size_t one = chunk.addConstant(Value(static_cast<int64_t>(1)));
+    size_t six = chunk.addConstant(Value(static_cast<int64_t>(6)));
+    size_t two = chunk.addConstant(Value(static_cast<int64_t>(2)));
+    size_t idx2 = chunk.addConstant(Value(static_cast<int64_t>(2)));
+    size_t fRange = addNative(chunk, "range");
+
+    // r = range(1, 6, 2) -> [1,3,5]
+    chunk.addInstruction(Instruction(OpCode::LOAD_CONST, static_cast<uint32_t>(one)));
+    chunk.addInstruction(Instruction(OpCode::LOAD_CONST, static_cast<uint32_t>(six)));
+    chunk.addInstruction(Instruction(OpCode::LOAD_CONST, static_cast<uint32_t>(two)));
+    chunk.addInstruction(Instruction(OpCode::LOAD_CONST, static_cast<uint32_t>(fRange)));
+    chunk.addInstruction(Instruction(OpCode::CALL, static_cast<uint32_t>(3)));
+
+    // Assert: r[2] == 5
+    chunk.addInstruction(Instruction(OpCode::LOAD_CONST, static_cast<uint32_t>(idx2)));
+    chunk.addInstruction(Instruction(OpCode::GET_ITEM));
+    chunk.addInstruction(Instruction(OpCode::HALT));
+
+    VM vm;
+    bool ok = vm.interpret(chunk);
+    EXPECT_TRUE(ok);
+    Value top = vm.peek();
+    EXPECT_TRUE(top.isInteger());
+    EXPECT_EQ(5, top.asInteger());
+}
+
+// range(start, stop, step) -> negative step
+TEST(Builtins, RangeStartStopStepNeg) {
+    Chunk chunk;
+
+    size_t five = chunk.addConstant(Value(static_cast<int64_t>(5)));
+    size_t zero = chunk.addConstant(Value(static_cast<int64_t>(0)));
+    size_t negTwo = chunk.addConstant(Value(static_cast<int64_t>(-2)));
+    size_t idx1 = chunk.addConstant(Value(static_cast<int64_t>(1)));
+    size_t fRange = addNative(chunk, "range");
+
+    // r = range(5, 0, -2) -> [5,3,1]
+    chunk.addInstruction(Instruction(OpCode::LOAD_CONST, static_cast<uint32_t>(five)));
+    chunk.addInstruction(Instruction(OpCode::LOAD_CONST, static_cast<uint32_t>(zero)));
+    chunk.addInstruction(Instruction(OpCode::LOAD_CONST, static_cast<uint32_t>(negTwo)));
+    chunk.addInstruction(Instruction(OpCode::LOAD_CONST, static_cast<uint32_t>(fRange)));
+    chunk.addInstruction(Instruction(OpCode::CALL, static_cast<uint32_t>(3)));
+
+    // Assert: r[1] == 3
+    chunk.addInstruction(Instruction(OpCode::LOAD_CONST, static_cast<uint32_t>(idx1)));
+    chunk.addInstruction(Instruction(OpCode::GET_ITEM));
+    chunk.addInstruction(Instruction(OpCode::HALT));
+
+    VM vm;
+    bool ok = vm.interpret(chunk);
+    EXPECT_TRUE(ok);
+    Value top = vm.peek();
+    EXPECT_TRUE(top.isInteger());
+    EXPECT_EQ(3, top.asInteger());
+}
+
+// range(start, stop, 0) -> ValueError
+TEST(Builtins, RangeZeroStepError) {
+    Chunk chunk;
+
+    size_t one = chunk.addConstant(Value(static_cast<int64_t>(1)));
+    size_t five = chunk.addConstant(Value(static_cast<int64_t>(5)));
+    size_t zero = chunk.addConstant(Value(static_cast<int64_t>(0)));
+    size_t fRange = addNative(chunk, "range");
+
+    // range(1, 5, 0) -> error
+    chunk.addInstruction(Instruction(OpCode::LOAD_CONST, static_cast<uint32_t>(one)));
+    chunk.addInstruction(Instruction(OpCode::LOAD_CONST, static_cast<uint32_t>(five)));
+    chunk.addInstruction(Instruction(OpCode::LOAD_CONST, static_cast<uint32_t>(zero)));
+    chunk.addInstruction(Instruction(OpCode::LOAD_CONST, static_cast<uint32_t>(fRange)));
+    chunk.addInstruction(Instruction(OpCode::CALL, static_cast<uint32_t>(3)));
+    chunk.addInstruction(Instruction(OpCode::HALT));
+
+    VM vm;
+    bool ok = vm.interpret(chunk);
+    EXPECT_FALSE(ok);
+    EXPECT_TRUE(vm.hasException());
+}
+
 // any([]) over string "" => false
 TEST(Builtins, AnyEmptyString) {
     Chunk chunk;

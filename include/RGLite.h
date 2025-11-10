@@ -57,6 +57,14 @@ public:
      * @return Execution result
      */
     int executeBytecode(const std::vector<uint8_t>& bytecode);
+
+    /**
+     * @brief Execute precompiled bytecode using a provided VM instance
+     * @param bytecode The bytecode to execute
+     * @param vm The VM to use for execution (mappings will be applied)
+     * @return Execution result
+     */
+    int executeBytecodeWithVM(const std::vector<uint8_t>& bytecode, VM& vm);
     
 private:
     // Helper function to get source line by line number

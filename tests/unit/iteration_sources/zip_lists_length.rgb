@@ -1,0 +1,4 @@
+it = zip([1, 2, 3], ["a", "b"])
+_ = next(it)
+_ = next(it)
+result = 2

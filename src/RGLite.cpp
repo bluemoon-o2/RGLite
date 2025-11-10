@@ -52,12 +52,30 @@ std::vector<uint8_t> Compiler::compile(const std::string& source) {
         auto ast = parser->parse();
         if (errorHandler->hasErrors()) {
             const auto& diagnostics = errorHandler->getDiagnostics();
+
+            // Prefer character-related errors (invalid character / unexpected character)
             const Diagnostic* selected = nullptr;
             for (const auto& d : diagnostics) {
-                if (d.severity == Severity::ERROR && d.column > 0) {
-                    selected = &d; // keep the last matching error
+                if (d.severity == Severity::ERROR) {
+                    const std::string& msg = d.message;
+                    if (msg.find("Unexpected character") != std::string::npos ||
+                        msg.find("unexpected character") != std::string::npos ||
+                        msg.find("invalid character") != std::string::npos) {
+                        selected = &d;
+                        break; // choose earliest character-related error
+                    }
                 }
             }
+
+            // If no character-related error found, choose the last ERROR with a non-zero column.
+            if (!selected) {
+                for (const auto& d : diagnostics) {
+                    if (d.severity == Severity::ERROR && d.column > 0) {
+                        selected = &d; // keep the last matching error
+                    }
+                }
+            }
+            // Fallback to the first ERROR if none has a column
             if (!selected) {
                 for (const auto& d : diagnostics) {
                     if (d.severity == Severity::ERROR) { selected = &d; break; }
@@ -170,9 +188,9 @@ std::vector<uint8_t> Compiler::compile(const std::string& source) {
         };
 
         std::vector<uint8_t> out;
-        // Header: magic + version
+        // Header: magic + version (format includes optional variable name table)
         writeString(out, std::string("RGLB"));
-        writeUint32(out, 1); // version
+        writeUint32(out, 2); // version 2: includes variable name table
         // Counts
         const auto& consts = chunkPtr->getConstants();
         const auto& instrs = chunkPtr->getInstructions();
@@ -187,6 +205,14 @@ std::vector<uint8_t> Compiler::compile(const std::string& source) {
             writeUint8(out, static_cast<uint8_t>(ins.opcode));
             writeUint32(out, ins.operand);
             writeUint32(out, ins.line);
+        }
+
+        // Variable name table section (index -> name)
+        const auto varTable = codegen->getVariableNameTable();
+        writeUint32(out, static_cast<uint32_t>(varTable.size()));
+        for (const auto& entry : varTable) {
+            writeUint32(out, entry.first);
+            writeString(out, entry.second);
         }
 
         return out;
@@ -235,13 +261,27 @@ int Compiler::execute(const std::string& source, const std::string& filename) {
         auto ast = parser->parse();
         if (errorHandler->hasErrors()) {
             const auto& diagnostics = errorHandler->getDiagnostics();
-            
-            // Prefer the most informative syntax error: choose the last ERROR with a non-zero column.
-            // This helps align the caret with the actual offending token (Python-like behavior).
+
+            // Prefer character-related errors (invalid character / unexpected character) when present
             const Diagnostic* selected = nullptr;
             for (const auto& d : diagnostics) {
-                if (d.severity == Severity::ERROR && d.column > 0) {
-                    selected = &d; // keep the last matching error
+                if (d.severity == Severity::ERROR) {
+                    const std::string& msg = d.message;
+                    if (msg.find("Unexpected character") != std::string::npos ||
+                        msg.find("unexpected character") != std::string::npos ||
+                        msg.find("invalid character") != std::string::npos) {
+                        selected = &d;
+                        break; // choose earliest character-related error
+                    }
+                }
+            }
+
+            // If no character-related error found, choose the last ERROR with a non-zero column.
+            if (!selected) {
+                for (const auto& d : diagnostics) {
+                    if (d.severity == Severity::ERROR && d.column > 0) {
+                        selected = &d; // keep the last matching error
+                    }
                 }
             }
             // Fallback to the first ERROR if none has a column
@@ -253,7 +293,7 @@ int Compiler::execute(const std::string& source, const std::string& filename) {
                     }
                 }
             }
-            
+
             if (selected) {
                 // Use the Diagnostic's toString method for consistent formatting
                 // The toString() method already includes the traceback header
@@ -271,11 +311,26 @@ int Compiler::execute(const std::string& source, const std::string& filename) {
         if (errorHandler->hasErrors()) {
             const auto& diagnostics = errorHandler->getDiagnostics();
 
-            // Prefer the most informative error: choose the last ERROR with a non-zero column.
+            // Prefer character-related errors (invalid character / unexpected character) when present
             const Diagnostic* selected = nullptr;
             for (const auto& d : diagnostics) {
-                if (d.severity == Severity::ERROR && d.column > 0) {
-                    selected = &d; // keep the last matching error
+                if (d.severity == Severity::ERROR) {
+                    const std::string& msg = d.message;
+                    if (msg.find("Unexpected character") != std::string::npos ||
+                        msg.find("unexpected character") != std::string::npos ||
+                        msg.find("invalid character") != std::string::npos) {
+                        selected = &d;
+                        break; // choose earliest character-related error
+                    }
+                }
+            }
+
+            // If no character-related error found, choose the last ERROR with a non-zero column.
+            if (!selected) {
+                for (const auto& d : diagnostics) {
+                    if (d.severity == Severity::ERROR && d.column > 0) {
+                        selected = &d; // keep the last matching error
+                    }
                 }
             }
             // Fallback to the first ERROR if none has a column
@@ -302,6 +357,7 @@ int Compiler::execute(const std::string& source, const std::string& filename) {
 
         // Create VM and attach to code generator BEFORE code generation, so variable names map correctly
         VM vm(codegen.get());
+        vm.setDebugLogging(options_.debug_info);
         codegen->setVM(&vm);
 
         // Generate bytecode from AST
@@ -314,12 +370,28 @@ int Compiler::execute(const std::string& source, const std::string& filename) {
         // Get the bytecode chunk
         auto chunk = codegen->getBytecode();
         
-        if (options_.debug_info) {
+        // Build variable name mappings into VM to ensure indices resolve during LOAD_VAR
+        if (chunk) {
+            auto varTable = codegen->getVariableNameTable();
+            for (const auto& p : varTable) {
+                vm.setVariableName(p.first, p.second);
+            }
+        }
+
+        // Debug: print basic chunk info and variable name table
+        const bool dbg = options_.debug_info || (std::getenv("RGLITE_DEBUG") != nullptr);
+        if (dbg && chunk) {
             const auto& constsDbg = chunk->getConstants();
             const auto& instrsDbg = chunk->getInstructions();
             std::cout << "[debug] file=" << fullFilename
                       << ", constants=" << constsDbg.size()
                       << ", instructions=" << instrsDbg.size() << std::endl;
+
+            auto varTable = codegen->getVariableNameTable();
+            std::cout << "[debug] variable name table size=" << varTable.size() << std::endl;
+            for (const auto& p : varTable) {
+                std::cout << "[debug] var index=" << p.first << ", name='" << p.second << "'" << std::endl;
+            }
         }
 
         // Execute the bytecode
@@ -394,7 +466,7 @@ int Compiler::executeBytecode(const std::vector<uint8_t>& bytecode) {
             return 1;
         }
         uint32_t version = 0; if (!readUint32(bytecode, off, version)) { std::cerr << "Invalid bytecode: missing version" << std::endl; return 1; }
-        if (version != 1) {
+        if (version != 1 && version != 2) {
             std::cerr << "Unsupported bytecode version: " << version << std::endl;
             return 1;
         }
@@ -422,6 +494,96 @@ int Compiler::executeBytecode(const std::vector<uint8_t>& bytecode) {
         }
 
         VM vm; // Builtins are registered in VM constructor
+        // For version 2, read and apply variable name table before interpret
+        if (version == 2) {
+            uint32_t varCount = 0;
+            if (!readUint32(bytecode, off, varCount)) {
+                std::cerr << "Invalid bytecode: missing variable table count" << std::endl;
+                return 1;
+            }
+            for (uint32_t i = 0; i < varCount; ++i) {
+                uint32_t idx = 0; std::string name;
+                if (!readUint32(bytecode, off, idx) || !readString(bytecode, off, name)) {
+                    std::cerr << "Invalid bytecode: variable table parse error" << std::endl;
+                    return 1;
+                }
+                vm.setVariableName(idx, name);
+            }
+        }
+        bool success = vm.interpret(chunk, "<bytecode>");
+        return success ? 0 : 1;
+    } catch (const std::exception& e) {
+        std::cerr << "Error during bytecode execution: " << e.what() << std::endl;
+        return 1;
+    }
+}
+
+int Compiler::executeBytecodeWithVM(const std::vector<uint8_t>& bytecode, VM& vm) {
+    // Deserialize bytecode and execute using provided VM (apply var name table if present)
+    try {
+        auto readUint8 = [](const std::vector<uint8_t>& in, size_t& off, uint8_t& out) -> bool {
+            if (off + 1 > in.size()) return false; out = in[off]; off += 1; return true;
+        };
+        auto readUint32 = [](const std::vector<uint8_t>& in, size_t& off, uint32_t& out) -> bool {
+            if (off + 4 > in.size()) return false; out = 0; for (int i=0;i<4;++i) out |= static_cast<uint32_t>(in[off+i]) << (i*8); off += 4; return true;
+        };
+        auto readUint64 = [](const std::vector<uint8_t>& in, size_t& off, uint64_t& out) -> bool {
+            if (off + 8 > in.size()) return false; out = 0; for (int i=0;i<8;++i) out |= static_cast<uint64_t>(in[off+i]) << (i*8); off += 8; return true;
+        };
+        auto readDouble = [&](const std::vector<uint8_t>& in, size_t& off, double& out) -> bool {
+            uint64_t u = 0; if (!readUint64(in, off, u)) return false; std::memcpy(&out, &u, sizeof(double)); return true;
+        };
+        auto readString = [&](const std::vector<uint8_t>& in, size_t& off, std::string& out) -> bool {
+            uint32_t len = 0; if (!readUint32(in, off, len)) return false; if (off + len > in.size()) return false; out.assign(reinterpret_cast<const char*>(&in[off]), len); off += len; return true;
+        };
+
+        auto deserializeValue = [&](const std::vector<uint8_t>& in, size_t& off, Value& v) -> bool {
+            uint8_t t = 0; if (!readUint8(in, off, t)) return false; auto type = static_cast<ValueType>(t);
+            switch (type) {
+                case ValueType::NIL: v = Value(); return true;
+                case ValueType::BOOLEAN: { uint8_t b=0; if (!readUint8(in, off, b)) return false; v = Value(b != 0); return true; }
+                case ValueType::INTEGER: { uint64_t u=0; if (!readUint64(in, off, u)) return false; v = Value(static_cast<int64_t>(u)); return true; }
+                case ValueType::FLOAT: { double d=0.0; if (!readDouble(in, off, d)) return false; v = Value(d); return true; }
+                case ValueType::STRING: { std::string s; if (!readString(in, off, s)) return false; v = Value(s); return true; }
+                case ValueType::LIST:
+                case ValueType::DICT:
+                case ValueType::TUPLE:
+                case ValueType::SET:
+                case ValueType::FUNCTION:
+                case ValueType::ITERATOR: { uint32_t idx=0; if (!readUint32(in, off, idx)) return false; v = Value(idx, type); return true; }
+                case ValueType::NATIVE_FUNCTION: { std::string name; if (!readString(in, off, name)) return false; v = Value(name, true); return true; }
+                case ValueType::EXCEPTION: { std::string msg; if (!readString(in, off, msg)) return false; v = Value(msg.c_str()); return true; }
+                default: return false;
+            }
+        };
+
+        size_t off = 0;
+        std::string magic;
+        if (!readString(bytecode, off, magic)) { std::cerr << "Invalid bytecode: missing header" << std::endl; return 1; }
+        if (magic != "RGLB") { std::cerr << "Invalid bytecode: bad magic" << std::endl; return 1; }
+        uint32_t version = 0; if (!readUint32(bytecode, off, version)) { std::cerr << "Invalid bytecode: missing version" << std::endl; return 1; }
+        if (version != 1 && version != 2) { std::cerr << "Unsupported bytecode version: " << version << std::endl; return 1; }
+        uint32_t constCount = 0, instrCount = 0;
+        if (!readUint32(bytecode, off, constCount) || !readUint32(bytecode, off, instrCount)) { std::cerr << "Invalid bytecode: missing counts" << std::endl; return 1; }
+
+        Chunk chunk;
+        for (uint32_t i = 0; i < constCount; ++i) { Value v; if (!deserializeValue(bytecode, off, v)) { std::cerr << "Invalid bytecode: constant parse error" << std::endl; return 1; } (void)chunk.addConstant(v); }
+        for (uint32_t i = 0; i < instrCount; ++i) {
+            uint8_t opc=0; uint32_t operand=0; uint32_t line=1;
+            if (!readUint8(bytecode, off, opc) || !readUint32(bytecode, off, operand) || !readUint32(bytecode, off, line)) { std::cerr << "Invalid bytecode: instruction parse error" << std::endl; return 1; }
+            Instruction ins(static_cast<OpCode>(opc), operand, line);
+            (void)chunk.addInstruction(ins);
+        }
+
+        if (version == 2) {
+            uint32_t varCount = 0; if (!readUint32(bytecode, off, varCount)) { std::cerr << "Invalid bytecode: missing variable table count" << std::endl; return 1; }
+            for (uint32_t i = 0; i < varCount; ++i) {
+                uint32_t idx = 0; std::string name;
+                if (!readUint32(bytecode, off, idx) || !readString(bytecode, off, name)) { std::cerr << "Invalid bytecode: variable table parse error" << std::endl; return 1; }
+                vm.setVariableName(idx, name);
+            }
+        }
+
         bool success = vm.interpret(chunk, "<bytecode>");
         return success ? 0 : 1;
     } catch (const std::exception& e) {

@@ -32,6 +32,10 @@ public:
     
     // Get function by index
     std::shared_ptr<Function> getFunctionByIndex(size_t index) const;
+
+    // Export variable name table (index -> name) for serialization
+    // Returned as pairs of (uint32_t index, std::string name)
+    std::vector<std::pair<uint32_t, std::string>> getVariableNameTable() const;
     
     // Get any errors that occurred during generation
     const std::vector<std::string>& getErrors() const { return errors_; }
@@ -63,6 +67,8 @@ public:
     void visitForStmt(ForStmt& stmt) override;
     void visitFunctionDeclStmt(FunctionDeclStmt& stmt) override;
     void visitReturnStmt(ReturnStmt& stmt) override;
+    void visitImportStmt(ImportStmt& stmt) override;
+    void visitFromImportStmt(FromImportStmt& stmt) override;
     
 private:
     // Current function being generated

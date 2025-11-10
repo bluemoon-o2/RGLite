@@ -159,6 +159,16 @@ public:
             elem->accept(*this);
         }
     }
+
+    void visitImportStmt(ImportStmt& stmt) override {
+        visitedNodes.push_back("ImportStmt");
+        // ImportStmt has no nested expressions to traverse
+    }
+
+    void visitFromImportStmt(FromImportStmt& stmt) override {
+        visitedNodes.push_back("FromImportStmt");
+        // FromImportStmt has no nested expressions to traverse
+    }
 };
 
 // Test suite for AST node creation and basic functionality
@@ -249,6 +259,42 @@ TEST(ASTSuite, ParseWhileStatement) {
     
     EXPECT_NE(ast, nullptr);
     
+    fixture.TearDown();
+}
+
+TEST(ASTSuite, ParseImportStatementAST) {
+    ASTTestFixture fixture;
+    fixture.SetUp();
+
+    auto ast = fixture.parseSource("import math\n");
+
+    EXPECT_NE(ast, nullptr);
+    EXPECT_EQ(ast->toString(), "ImportStmt([math])");
+
+    // Visitor should see ImportStmt
+    TestVisitor visitor;
+    ast->accept(visitor);
+    EXPECT_FALSE(visitor.visitedNodes.empty());
+    EXPECT_EQ(visitor.visitedNodes[0], "ImportStmt");
+
+    fixture.TearDown();
+}
+
+TEST(ASTSuite, ParseFromImportStatementAST) {
+    ASTTestFixture fixture;
+    fixture.SetUp();
+
+    auto ast = fixture.parseSource("from math import sqrt\n");
+
+    EXPECT_NE(ast, nullptr);
+    EXPECT_EQ(ast->toString(), "FromImportStmt(module: math, names: [sqrt])");
+
+    // Visitor should see FromImportStmt
+    TestVisitor visitor;
+    ast->accept(visitor);
+    EXPECT_FALSE(visitor.visitedNodes.empty());
+    EXPECT_EQ(visitor.visitedNodes[0], "FromImportStmt");
+
     fixture.TearDown();
 }
 

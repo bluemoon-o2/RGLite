@@ -18,6 +18,7 @@ target_link_libraries(rglite
         rglite_frontend
         rglite_backend
         rglite_builtin
+        rglite_runtime
         rglite_memory
         rglite_warnings
 )

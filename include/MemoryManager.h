@@ -224,8 +224,8 @@ private:
     
     // Clear marks
     void clearMarks();
-    
-    // Free unmarked objects
+
+    // Free unmarked objects (legacy hook; handled by sweepPhase)
     void freeUnmarkedObjects();
 };
 

@@ -1,0 +1,8 @@
+from tests.modules.mod_star_all import *
+print(a)
+print(func())
+print(b)
+
+from tests.modules.mod_star_noall import *
+print(a)
+print(c)

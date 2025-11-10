@@ -34,8 +34,8 @@ struct Diagnostic {
     int end_column;  // End column for multi-line errors
     int end_line;  // End line for multi-line errors
     std::string filename;  // Filename for error reporting
-    std::string function_name;  // Function name for context (Python-style)
-    bool displayTracebackHeader = false; // Whether to display the "Traceback (most recent call last):" header (Python-style)
+    std::string function_name;  // Function name for context
+    bool displayTracebackHeader = false; // Whether to display the "Traceback (most recent call last):" header
     
     Diagnostic(Severity s, const std::string& msg, const SourceLocation& loc, 
                const std::string& c = "", const std::string& srcLine = "", 

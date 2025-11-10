@@ -34,6 +34,11 @@ static const std::unordered_map<std::string, TokenType> KEYWORDS = {
     {"or", TokenType::KW_OR},
     {"not", TokenType::KW_NOT},
     
+    // Import system
+    {"import", TokenType::KW_IMPORT},
+    {"from", TokenType::KW_FROM},
+    {"as", TokenType::KW_AS},
+
     // Data types
     {"tuple", TokenType::KW_TUPLE},
     {"set", TokenType::KW_SET}
@@ -275,10 +280,11 @@ void Lexer::skipBlockComment() {
 
 Token Lexer::makeToken(TokenType type) {
     std::string lexeme = source_.substr(start_, position_ - start_);
-    // Fix column calculation: use start position instead of current position minus length
-    // The token starts at column_ - (position_ - start_) + 1
+    // Column calculation: the token starts at the first consumed character
+    // After consuming N chars, column_ points to the position AFTER the token.
+    // So start column = column_ - (position_ - start_)
     size_t tokenLength = position_ - start_;
-    size_t tokenStartColumn = (tokenLength > 0) ? (column_ - tokenLength + 1) : column_;
+    size_t tokenStartColumn = (tokenLength > 0) ? (column_ - tokenLength) : column_;
     // FIX: Use current line_ for all tokens to maintain consistency
     SourceLocation loc = {static_cast<uint32_t>(line_), static_cast<uint32_t>(tokenStartColumn)};
     return Token{type, lexeme, loc};
@@ -288,7 +294,7 @@ Token Lexer::makeToken(TokenType type, const std::string& literal) {
     // Use consumed length for column calculation; literal length may differ
     // for strings (quotes removed) and multi-line literals.
     size_t consumedLength = (position_ >= start_) ? (position_ - start_) : 0;
-    size_t tokenStartColumn = (consumedLength > 0) ? (column_ - consumedLength + 1) : column_;
+    size_t tokenStartColumn = (consumedLength > 0) ? (column_ - consumedLength) : column_;
     SourceLocation loc = {static_cast<uint32_t>(line_), static_cast<uint32_t>(tokenStartColumn)};
 
     // For string literals, store actual string content (without quotes) in lexeme

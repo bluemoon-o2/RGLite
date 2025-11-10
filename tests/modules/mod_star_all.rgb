@@ -1,0 +1,9 @@
+__doc__ = "star all module"
+__all__ = ["a", "func", "b"]
+
+a = 123
+b = []
+
+def func():
+    return 42
+

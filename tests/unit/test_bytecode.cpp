@@ -194,4 +194,46 @@ TEST_F(BytecodeGenerationTestFixture, ListCreation, BytecodeGenerationTestFixtur
     }
 }
 
+// Test suite for member attribute assignment bytecode generation
+TEST_F(BytecodeGenerationTestFixture, MemberAssignment, BytecodeGenerationTestFixture) {
+    auto ast = parseSource("d = {}\nd.attr = 1");
+    EXPECT_NE(ast, nullptr);
+
+    auto function = codegen->generate(std::shared_ptr<ASTNode>(ast.release()));
+    EXPECT_FALSE(codegen->hasErrors());
+    const auto& chunk = function->getChunk();
+    EXPECT_GT(chunk.size(), 0);
+
+    bool foundSetAttr = false;
+    for (size_t i = 0; i < chunk.size(); ++i) {
+        const auto& instr = chunk.getInstruction(i);
+        if (instr.opcode == OpCode::SET_ATTR) {
+            foundSetAttr = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(foundSetAttr);
+}
+
+// Test suite for index assignment bytecode generation
+TEST_F(BytecodeGenerationTestFixture, IndexAssignment, BytecodeGenerationTestFixture) {
+    auto ast = parseSource("a = [0]\na[0] = 42");
+    EXPECT_NE(ast, nullptr);
+
+    auto function = codegen->generate(std::shared_ptr<ASTNode>(ast.release()));
+    EXPECT_FALSE(codegen->hasErrors());
+    const auto& chunk = function->getChunk();
+    EXPECT_GT(chunk.size(), 0);
+
+    bool foundSetItem = false;
+    for (size_t i = 0; i < chunk.size(); ++i) {
+        const auto& instr = chunk.getInstruction(i);
+        if (instr.opcode == OpCode::SET_ITEM) {
+            foundSetItem = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(foundSetItem);
+}
+
 RUN_ALL_TESTS();

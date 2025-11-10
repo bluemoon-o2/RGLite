@@ -54,6 +54,8 @@ public:
     // Execute a chunk of bytecode
     bool interpret(const Chunk& chunk);
     bool interpret(const Chunk& chunk, const std::string& filename);
+    // Execute a chunk in isolated execution context while preserving caller state
+    bool executeChunkIsolated(const Chunk& chunk, const std::string& filename);
     
     // Execute a function
     bool call(const Function* function, int argCount, size_t returnIP, uint32_t line = 1);
@@ -121,6 +123,31 @@ public:
     
     // Set variable name mapping for error reporting
     void setVariableName(uint32_t index, const std::string& name);
+    // Get full variable name mapping (index -> name)
+    // Used by import to snapshot and restore caller context
+    std::unordered_map<uint32_t, std::string> getVariableNameMap() const;
+    // Replace variable name mapping wholesale
+    void setVariableNameMap(const std::unordered_map<uint32_t, std::string>& mapping);
+
+    // Debug logging control
+    void setDebugLogging(bool enabled);
+
+    // Code generator access
+    CodeGenerator* getCodeGenerator() const { return codeGenerator_; }
+    void setCodeGenerator(CodeGenerator* codeGenerator) { codeGenerator_ = codeGenerator; }
+
+    // Global user-defined function registry (supports cross-module calls)
+    // Register function and obtain VM-wide id
+    uint32_t registerFunction(std::shared_ptr<Function> function);
+    // Lookup function by VM-wide id
+    std::shared_ptr<Function> getFunctionById(uint32_t id) const;
+
+    // Globals accessors for builtins like __import__
+    std::vector<std::string> getGlobalKeys() const;
+    bool hasGlobal(const std::string& name) const;
+    Value getGlobal(const std::string& name) const;
+    void setGlobal(const std::string& name, const Value& value);
+    void eraseGlobal(const std::string& name);
 
 private:
     // Execution methods
@@ -159,6 +186,10 @@ private:
     
     // Native functions
     std::unordered_map<std::string, NativeFunction> nativeFunctions_;
+
+    // VM-wide registry for user-defined functions
+    std::unordered_map<uint32_t, std::shared_ptr<Function>> functionRegistry_;
+    uint32_t nextFunctionId_ = 0;
     
     // Execution state
     bool hadError_;
@@ -186,6 +217,9 @@ private:
     
     // Memory manager
     MemoryManager memoryManager_;                // Memory management for objects
+
+    // Debug logging flag
+    bool debugLogging_ = false;
 };
 
 } // namespace rglite

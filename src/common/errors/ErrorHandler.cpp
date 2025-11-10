@@ -11,8 +11,7 @@ namespace rglite {
 std::string Diagnostic::toString() const {
     std::stringstream ss;
     
-    // Python-style traceback format with full file path
-    // Only show traceback header for errors that are not immediate syntax errors (like Python)
+    // Only show traceback header for errors that are not immediate syntax errors
     if (displayTracebackHeader) {
         ss << "Traceback (most recent call last):\n";
     }
@@ -127,15 +126,27 @@ std::string Diagnostic::toString() const {
                 currentPos++;
             }
             
-            // Generate the ^ markers (Python style - single caret for syntax errors)
-            // Python typically uses single caret for syntax errors, multiple for runtime errors
-            int caretCount = 1;
-            if (end_column > column) {
-                caretCount = end_column - column;
+            // Calculate visual width for the error span (respect tabs)
+            int caretCount = (end_column > column) ? (end_column - column) : 1;
+            // Fallback: infer token length from message when end_column is not provided
+            if (caretCount == 1) {
+                // Try to detect pattern: "unexpected token '<lexeme>'"
+                size_t pos = message.find("unexpected token '");
+                if (pos != std::string::npos) {
+                    pos += std::string("unexpected token '").size();
+                    size_t end = message.find("'", pos);
+                    if (end != std::string::npos && end > pos) {
+                        std::string tok = message.substr(pos, end - pos);
+                        if (!tok.empty()) {
+                            caretCount = static_cast<int>(tok.size());
+                            // If the source at position matches the token, we keep caretCount;
+                            // otherwise we still use tok.size() as a best-effort span.
+                        }
+                    }
+                }
             }
             if (caretCount < 1) caretCount = 1;
-            
-            // Calculate visual width for caret markers
+
             int visualWidth = 0;
             for (int i = col - 1; i < static_cast<int>(rtext.size()) && i < col - 1 + caretCount; ++i) {
                 if (rtext[i] == '\t') {
@@ -145,9 +156,43 @@ std::string Diagnostic::toString() const {
                 }
             }
 
-            // Add caret markers
-            for (int i = 0; i < visualWidth; ++i) {
+            // Secondary fallback: extend span across repeated same-character runs (e.g., '**', '&&')
+            if (visualWidth == 1 && col - 1 < static_cast<int>(rtext.size())) {
+                char ch = rtext[col - 1];
+                // Consider only visible non-whitespace characters for run extension
+                if (ch != ' ' && ch != '\t' && ch != '\f' && ch != '\r' && ch != '\n') {
+                    int extra = 0;
+                    for (int i = col; i < static_cast<int>(rtext.size()); ++i) {
+                        if (rtext[i] == ch) {
+                            // Tab spans are handled separately; here we only extend for same char
+                            extra++;
+                        } else {
+                            break;
+                        }
+                        // Avoid over-long spans
+                        if (extra > 32) break;
+                    }
+                    caretCount += extra;
+                    // Recompute visualWidth with extended span
+                    visualWidth = 0;
+                    for (int i = col - 1; i < static_cast<int>(rtext.size()) && i < col - 1 + caretCount; ++i) {
+                        if (rtext[i] == '\t') {
+                            visualWidth += 8 - (visualWidth % 8);
+                        } else {
+                            visualWidth++;
+                        }
+                    }
+                }
+            }
+
+            // Python-style indicator: '^' for start, '~' to cover the rest of the span
+            if (visualWidth <= 1) {
                 caretline += '^';
+            } else {
+                caretline += '^';
+                for (int i = 1; i < visualWidth; ++i) {
+                    caretline += '~';
+                }
             }
 
             ss << "    " << caretline << "\n";
@@ -166,20 +211,43 @@ std::string Diagnostic::toString() const {
                 ss << "SyntaxError: '[' was never closed";
             } else if (message.find("brace not closed") != std::string::npos) {
                 ss << "SyntaxError: '{' was never closed";
-            } else if (message.find("Mixed indentation") != std::string::npos || message.find("mixed indentation") != std::string::npos) {
+            } else if (message.find("Mixed indentation") != std::string::npos || message.find("mixed indentation") != std::string::npos 
+                       || message.find("tabs and spaces") != std::string::npos) {
                 ss << "TabError: inconsistent use of tabs and spaces in indentation";
             } else if (message.find("invalid indentation") != std::string::npos || message.find("Expected INDENT") != std::string::npos) {
                 ss << "IndentationError: expected an indented block";
+            } else if (message.find("Unexpected character") != std::string::npos || message.find("unexpected character") != std::string::npos) {
+                ss << "SyntaxError: invalid character";
+            } else if (message.find("unexpected token") != std::string::npos) {
+                // If the offending token is a non-ASCII character, prefer invalid character
+                if (!sourceLine.empty() && location.column >= 1 && location.column <= sourceLine.size()) {
+                    unsigned char ch = static_cast<unsigned char>(sourceLine[location.column - 1]);
+                    if (ch >= 128) {
+                        ss << "SyntaxError: invalid character";
+                    } else {
+                        ss << "SyntaxError: invalid syntax";
+                    }
+                } else {
+                    ss << "SyntaxError: invalid syntax";
+                }
             } else if (message.find("unexpected") != std::string::npos) {
                 ss << "SyntaxError: invalid syntax";
             } else if (message.find("Unterminated string literal") != std::string::npos || message.find("unterminated string") != std::string::npos) {
                 ss << "SyntaxError: unterminated string literal (detected at line " << location.line << ")";
             } else if (message.find("Invalid number format") != std::string::npos) {
                 ss << "SyntaxError: invalid decimal literal";
-            } else if (message.find("Unexpected character") != std::string::npos || message.find("unexpected character") != std::string::npos) {
-                ss << "SyntaxError: invalid character";
             } else if (message.rfind("Expected ", 0) == 0) { // starts with "Expected "
-                ss << "SyntaxError: invalid syntax";
+                // Heuristic: if the caret points to a non-ASCII character, prefer invalid character
+                if (!sourceLine.empty() && location.column >= 1 && location.column <= sourceLine.size()) {
+                    unsigned char ch = static_cast<unsigned char>(sourceLine[location.column - 1]);
+                    if (ch >= 128) {
+                        ss << "SyntaxError: invalid character";
+                    } else {
+                        ss << "SyntaxError: invalid syntax";
+                    }
+                } else {
+                    ss << "SyntaxError: invalid syntax";
+                }
             } else if (message.find("Undefined variable") != std::string::npos) {
                 // Extract variable name from message like "Undefined variable 'x'"
                 size_t start = message.find("'") + 1;

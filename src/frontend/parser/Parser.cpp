@@ -184,7 +184,8 @@ void Parser::synchronize() {
         // Check for statement start tokens
         if (checkToken(TokenType::KW_DEF) || checkToken(TokenType::KW_IF) ||
             checkToken(TokenType::KW_WHILE) || checkToken(TokenType::KW_FOR) ||
-            checkToken(TokenType::KW_RETURN)) {
+            checkToken(TokenType::KW_RETURN) || checkToken(TokenType::KW_IMPORT) ||
+            checkToken(TokenType::KW_FROM)) {
             return;
         }
         
@@ -232,6 +233,12 @@ std::unique_ptr<Stmt> Parser::parseStatement() {
     if (checkToken(TokenType::KW_RETURN)) {
         return parseReturnStatement();
     }
+    if (checkToken(TokenType::KW_IMPORT)) {
+        return parseImportStatement();
+    }
+    if (checkToken(TokenType::KW_FROM)) {
+        return parseFromImportStatement();
+    }
     if (checkToken(TokenType::END_OF_FILE)) {
         return nullptr;
     }
@@ -239,6 +246,122 @@ std::unique_ptr<Stmt> Parser::parseStatement() {
     // In Python-style, all identifier = expression are treated as expression statements
     // Variable declaration is implicit through assignment
     return parseExpressionStatement();
+}
+
+std::unique_ptr<ImportStmt> Parser::parseImportStatement() {
+    // 'import' dotted_name ('as' identifier)? (',' dotted_name ('as' identifier)?)* NEWLINE?
+    auto importTok = currentToken_;
+    expectToken(TokenType::KW_IMPORT);
+
+    std::vector<ImportStmt::Item> items;
+    while (true) {
+        // Parse dotted_name: IDENTIFIER ('.' IDENTIFIER)*
+        if (!checkToken(TokenType::IDENTIFIER)) {
+            error("Expected module name after 'import'");
+            break;
+        }
+        std::string module = currentToken_.lexeme;
+        auto startLoc = currentToken_.location;
+        nextToken();
+        while (matchToken(TokenType::PUNCT_DOT)) {
+            if (!checkToken(TokenType::IDENTIFIER)) {
+                error("Expected identifier after '.' in module name");
+                break;
+            }
+            module += "." + currentToken_.lexeme;
+            nextToken();
+        }
+
+        std::string alias;
+        if (checkToken(TokenType::KW_AS)) {
+            nextToken();
+            if (!checkToken(TokenType::IDENTIFIER)) {
+                error("Expected identifier after 'as'");
+            } else {
+                alias = currentToken_.lexeme;
+                nextToken();
+            }
+        }
+
+        items.push_back(ImportStmt::Item{module, alias});
+
+        if (!matchToken(TokenType::PUNCT_COMMA)) {
+            break;
+        }
+    }
+
+    // Consume optional NEWLINE
+    if (checkToken(TokenType::NEWLINE)) {
+        nextToken();
+    }
+
+    return std::make_unique<ImportStmt>(std::move(items), importTok.location);
+}
+
+std::unique_ptr<FromImportStmt> Parser::parseFromImportStatement() {
+    // 'from' dotted_name 'import' ('*' | import_name ('as' identifier)? (',' import_name ('as' identifier)?)* ) NEWLINE?
+    auto fromTok = currentToken_;
+    expectToken(TokenType::KW_FROM);
+
+    // dotted_name
+    if (!checkToken(TokenType::IDENTIFIER)) {
+        error("Expected module name after 'from'");
+        // attempt recovery
+    }
+    std::string module = currentToken_.lexeme;
+    nextToken();
+    while (matchToken(TokenType::PUNCT_DOT)) {
+        if (!checkToken(TokenType::IDENTIFIER)) {
+            error("Expected identifier after '.' in module name");
+            break;
+        }
+        module += "." + currentToken_.lexeme;
+        nextToken();
+    }
+
+    expectToken(TokenType::KW_IMPORT);
+
+    bool importAll = false;
+    std::vector<FromImportStmt::NameItem> names;
+
+    if (checkToken(TokenType::OP_MULTIPLY)) {
+        // using OP_MULTIPLY for '*' token (since '*' is OP_MULTIPLY)
+        importAll = true;
+        nextToken();
+    } else {
+        while (true) {
+            if (!checkToken(TokenType::IDENTIFIER)) {
+                error("Expected identifier in import list");
+                break;
+            }
+            std::string name = currentToken_.lexeme;
+            nextToken();
+
+            std::string alias;
+            if (checkToken(TokenType::KW_AS)) {
+                nextToken();
+                if (!checkToken(TokenType::IDENTIFIER)) {
+                    error("Expected identifier after 'as'");
+                } else {
+                    alias = currentToken_.lexeme;
+                    nextToken();
+                }
+            }
+
+            names.push_back(FromImportStmt::NameItem{name, alias});
+
+            if (!matchToken(TokenType::PUNCT_COMMA)) {
+                break;
+            }
+        }
+    }
+
+    // Consume optional NEWLINE
+    if (checkToken(TokenType::NEWLINE)) {
+        nextToken();
+    }
+
+    return std::make_unique<FromImportStmt>(module, importAll, std::move(names), fromTok.location);
 }
 
 std::unique_ptr<ExprStmt> Parser::parseExpressionStatement() {
@@ -383,8 +506,10 @@ std::unique_ptr<Expr> Parser::parseAssignment() {
         nextToken();  // Consume the assignment operator
         auto value = parseAssignment();
         
-        // Check if left side is an identifier
-        if (auto identifier = dynamic_cast<IdentifierExpr*>(expr.get())) {
+        // Allow identifier, member access, and index access as assignment targets
+        if (dynamic_cast<IdentifierExpr*>(expr.get()) ||
+            dynamic_cast<MemberAccessExpr*>(expr.get()) ||
+            dynamic_cast<IndexAccessExpr*>(expr.get())) {
             return std::make_unique<rglite::BinaryExpr>(std::move(expr), op, std::move(value));
         }
         
@@ -737,6 +862,12 @@ std::unique_ptr<Expr> Parser::parsePrimary() {
     }
 
     // If we reach here, we have an unexpected token
+    // If the current token is INVALID (from lexer), avoid emitting a redundant parser error
+    // and let the lexer-provided diagnostic (e.g., unexpected character) be the primary message.
+    if (checkToken(TokenType::INVALID)) {
+        nextToken();
+        return nullptr;
+    }
     error("Expected expression");
     // Advance to avoid infinite loop
     nextToken();
@@ -1060,8 +1191,9 @@ std::string Parser::tokenTypeToString(TokenType type) {
         case TokenType::PUNCT_COLON: return "':'";
         case TokenType::PUNCT_DOT: return "'.";
         case TokenType::NEWLINE: return "newline";
-        case TokenType::INDENT: return "indent";
-        case TokenType::DEDENT: return "dedent";
+        // Use uppercase names to align with ErrorHandler mapping
+        case TokenType::INDENT: return "INDENT";
+        case TokenType::DEDENT: return "DEDENT";
         case TokenType::END_OF_FILE: return "end of file";
         default: return "token";
     }

@@ -1,0 +1,224 @@
+import re
+from typing import Any, List, Dict, Union
+
+# ------------------------------
+# 1. 词法分析器（Tokenizer）
+# 作用：将JSON字符串拆分为Token序列
+# ------------------------------
+class JSONTokenizer:
+    def __init__(self, json_str: str):
+        self.json_str = json_str
+        self.pos = 0  # 当前字符位置
+        self.length = len(json_str)
+        # 匹配JSON中所有可能的Token
+        self.token_specs = [
+            ('NUMBER', r'-?\d+(\.\d+)?([eE][+-]?\d+)?'),  # 数字（整数、浮点数、科学计数法）
+            ('STRING', r'"(\\.|[^"\\])*"'),  # 字符串（支持转义）
+            ('TRUE', r'true'),  # 关键字true
+            ('FALSE', r'false'),  # 关键字false
+            ('NULL', r'null'),  # 关键字null
+            ('LBRACE', r'\{'),  # 左花括号 {
+            ('RBRACE', r'\}'),  # 右花括号 }
+            ('LBRACKET', r'\['),  # 左方括号 [
+            ('RBRACKET', r'\]'),  # 右方括号 ]
+            ('COLON', r':'),  # 冒号 :
+            ('COMMA', r','),  # 逗号 ,
+            ('WHITESPACE', r'[ \t\n\r]+'),  # 空白字符（跳过）
+        ]
+        # 构建正则表达式，用于匹配Token
+        self.token_regex = '|'.join(f'(?P<{name}>{pattern})' for name, pattern in self.token_specs)
+
+    def next_token(self):
+        """获取下一个Token（类型+值）"""
+        # 跳过空白字符
+        while self.pos < self.length and self.json_str[self.pos].isspace():
+            self.pos += 1
+
+        if self.pos >= self.length:
+            return None  # 解析结束
+
+        # 用正则匹配当前位置的Token
+        match = re.match(self.token_regex, self.json_str[self.pos:])
+        if not match:
+            raise SyntaxError(f"无效字符: {self.json_str[self.pos]} at position {self.pos}")
+
+        token_type = match.lastgroup  # 获取匹配的Token类型
+        token_value = match.group(token_type)  # 获取匹配的Token值
+        self.pos += len(token_value)  # 移动指针到下一个Token
+
+        # 忽略空白字符Token
+        if token_type == 'WHITESPACE':
+            return self.next_token()
+
+        # 处理特殊类型的值
+        if token_type == 'STRING':
+            # 去除引号，并处理转义字符（简化版）
+            return 'STRING', token_value[1:-1].replace(r'\"', '"').replace(r'\\', '\\')
+        elif token_type == 'NUMBER':
+            # 转换为int或float
+            return ('NUMBER', int(token_value) if '.' not in token_value and 'e' not in token_value.lower() else float(
+                token_value))
+        elif token_type in ['TRUE', 'FALSE', 'NULL']:
+            return 'KEYWORD', token_value
+        else:
+            # 符号类Token（如{、}、:等）
+            return token_type, token_value
+
+
+# ------------------------------
+# 2. 语法分析器（Parser）
+# 作用：通过递归下降算法解析Token序列，生成Python数据结构
+# ------------------------------
+class JSONParser:
+    def __init__(self, tokenizer: JSONTokenizer):
+        self.tokenizer = tokenizer
+        self.current_token = self.tokenizer.next_token()  # 当前Token
+
+    def error(self, expected: str):
+        """抛出语法错误"""
+        _, current_value = self.current_token or ('EOF', 'end of input')
+        raise SyntaxError(f"预期 {expected}，但得到 {current_value}")
+
+    def consume(self, expected_type: str):
+        """消耗当前Token，并检查是否符合预期类型"""
+        if self.current_token and self.current_token[0] == expected_type:
+            self.current_token = self.tokenizer.next_token()
+        else:
+            self.error(expected_type)
+
+    def parse(self) -> Union[Dict, List, str, int, float, bool, None]:
+        """解析入口：JSON的根节点可以是对象或数组"""
+        if not self.current_token:
+            raise SyntaxError("空JSON")
+        return self.parse_value()
+
+    def parse_value(self) -> Union[Dict, List, str, int, float, bool, None]:
+        """解析JSON值（可以是对象、数组、字符串、数字、关键字）"""
+        token_type, token_value = self.current_token
+
+        if token_type == 'LBRACE':
+            return self.parse_object()  # 解析对象
+        elif token_type == 'LBRACKET':
+            return self.parse_array()  # 解析数组
+        elif token_type == 'STRING':
+            value = token_value
+            self.consume('STRING')
+            return value
+        elif token_type == 'NUMBER':
+            value = token_value
+            self.consume('NUMBER')
+            return value
+        elif token_type == 'KEYWORD':
+            value = token_value
+            self.consume('KEYWORD')
+            if value == 'true':
+                return True
+            elif value == 'false':
+                return False
+            elif value == 'null':
+                return None
+        else:
+            self.error("value (object, array, string, number, true, false, null)")
+
+    def parse_object(self) -> Dict:
+        """解析JSON对象：{ key: value, ... }"""
+        obj = {}
+        self.consume('LBRACE')  # 消耗左花括号
+
+        # 处理空对象
+        if self.current_token[0] == 'RBRACE':
+            self.consume('RBRACE')
+            return obj
+
+        # 解析键值对
+        while True:
+            # 键必须是字符串
+            if self.current_token[0] != 'STRING':
+                self.error("string (as key)")
+            key = self.current_token[1]
+            self.consume('STRING')
+
+            # 解析冒号
+            self.consume('COLON')
+
+            # 解析值
+            value = self.parse_value()
+            obj[key] = value
+
+            # 处理逗号或结束符
+            if self.current_token[0] == 'COMMA':
+                self.consume('COMMA')
+            elif self.current_token[0] == 'RBRACE':
+                self.consume('RBRACE')
+                break
+            else:
+                self.error("',' or '}'")
+
+        return obj
+
+    def parse_array(self) -> List:
+        """解析JSON数组：[ value, ... ]"""
+        arr = []
+        self.consume('LBRACKET')  # 消耗左方括号
+
+        # 处理空数组
+        if self.current_token[0] == 'RBRACKET':
+            self.consume('RBRACKET')
+            return arr
+
+        # 解析数组元素
+        while True:
+            value = self.parse_value()
+            arr.append(value)
+
+            # 处理逗号或结束符
+            if self.current_token[0] == 'COMMA':
+                self.consume('COMMA')
+            elif self.current_token[0] == 'RBRACKET':
+                self.consume('RBRACKET')
+                break
+            else:
+                self.error("',' or ']'")
+
+        return arr
+
+
+# ------------------------------
+# 对外接口：类似json.loads
+# ------------------------------
+def loads(json_str: str) -> Any:
+    tokenizer = JSONTokenizer(json_str)
+    parser = JSONParser(tokenizer)
+    return parser.parse()
+
+
+# ------------------------------
+# 测试示例
+# ------------------------------
+if __name__ == "__main__":
+    test_json = '''
+    {
+        "name": "Llama 3",
+        "parameters": 8000000000,
+        "is_open": true,
+        "versions": [1, 2, 3],
+        "metadata": {
+            "release_date": "2024",
+            "author": null
+        }
+    }
+    '''
+
+    try:
+        result = loads(test_json)
+        print("解析结果：")
+        print(result)
+        print("\n类型检查：")
+        print(f"name: {type(result['name'])}")
+        print(f"parameters: {type(result['parameters'])}")
+        print(f"is_open: {type(result['is_open'])}")
+        print(f"versions: {type(result['versions'])}")
+        print(f"metadata: {type(result['metadata'])}")
+        print(f"author: {type(result['metadata']['author'])}")
+    except SyntaxError as e:
+        print(f"解析错误：{e}")

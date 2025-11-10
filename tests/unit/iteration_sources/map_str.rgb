@@ -1,0 +1,3 @@
+it = map(str, [1, 2])
+_ = next(it)
+result = next(it)

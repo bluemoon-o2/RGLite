@@ -36,6 +36,14 @@ Value nativeInt(VM& vm, const std::vector<Value>& args);
 Value nativeStr(VM& vm, const std::vector<Value>& args);
 Value nativeSubstr(VM& vm, const std::vector<Value>& args);
 
+// Iteration helpers
+Value nativeIter(VM& vm, const std::vector<Value>& args);
+Value nativeNext(VM& vm, const std::vector<Value>& args);
+Value nativeEnumerate(VM& vm, const std::vector<Value>& args);
+Value nativeZip(VM& vm, const std::vector<Value>& args);
+Value nativeMap(VM& vm, const std::vector<Value>& args);
+Value nativeFilter(VM& vm, const std::vector<Value>& args);
+
 // List functions
 Value nativeAppend(VM& vm, const std::vector<Value>& args);
 Value nativeRemove(VM& vm, const std::vector<Value>& args);
@@ -67,6 +75,12 @@ Value nativeSetDefault(VM& vm, const std::vector<Value>& args);
 // I/O functions
 Value nativePrint(VM& vm, const std::vector<Value>& args);
 Value nativeLen(VM& vm, const std::vector<Value>& args);
+Value nativeRange(VM& vm, const std::vector<Value>& args);
+
+// Import function
+Value nativeImport(VM& vm, const std::vector<Value>& args);
+// Import-all helper
+Value nativeImportAll(VM& vm, const std::vector<Value>& args);
 
 // Logical aggregation functions
 Value nativeAny(VM& vm, const std::vector<Value>& args);
